@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Start Page</title>
+    <style>
+        :root {
+            --bg-color: #1a1a1a;
+            --card-bg: #2d2d2d;
+            --text-color: #e0e0e0;
+            --accent-color: #64ffda;
+            --hover-bg: #3d3d3d;
+            --font-main: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: var(--font-main);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+        }
+
+        /* Clock Styles */
+        #clock {
+            font-size: 4rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+            letter-spacing: 2px;
+        }
+
+        #date {
+            font-size: 1.2rem;
+            color: #888;
+            margin-bottom: 3rem;
+        }
+
+        /* Search Bar Styles */
+        .search-container {
+            margin-bottom: 3rem;
+            width: 100%;
+            max-width: 600px;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 15px 25px;
+            border-radius: 30px;
+            border: none;
+            background-color: var(--card-bg);
+            color: var(--text-color);
+            font-size: 1.1rem;
+            outline: none;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: transform 0.2s;
+        }
+
+        .search-input:focus {
+            transform: scale(1.02);
+            box-shadow: 0 0 0 2px var(--accent-color);
+        }
+
+        /* Links Grid Styles */
+        .links-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 1.5rem;
+            width: 100%;
+            max-width: 800px;
+            padding: 0 20px;
+        }
+
+        .link-card {
+            background-color: var(--card-bg);
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+            text-decoration: none;
+            color: var(--text-color);
+            transition: background-color 0.2s, transform 0.2s;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .link-card:hover {
+            background-color: var(--hover-bg);
+            transform: translateY(-5px);
+            color: var(--accent-color);
+        }
+
+        .link-icon {
+            font-size: 1.5rem;
+            margin-bottom: 10px;
+            display: block;
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 600px) {
+            #clock { font-size: 3rem; }
+            .links-container { grid-template-columns: repeat(2, 1fr); }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Time and Date -->
+    <div id="clock">00:00</div>
+    <div id="date">Loading date...</div>
+
+    <!-- Search Bar (Google) -->
+    <form action="https://www.google.com/search" method="GET" class="search-container">
+        <input type="text" name="q" class="search-input" placeholder="Search Google..." autofocus autocomplete="off">
+    </form>
+
+    <!-- Quick Links -->
+    <div class="links-container">
+        <a href="https://github.com" class="link-card">
+            <span class="link-icon">💻</span>
+            GitHub
+        </a>
+        <a href="https://youtube.com" class="link-card">
+            <span class="link-icon">📺</span>
+            YouTube
+        </a>
+        <a href="https://reddit.com" class="link-card">
+            <span class="link-icon">🤖</span>
+            Reddit
+        </a>
+        <a href="https://gmail.com" class="link-card">
+            <span class="link-icon">📧</span>
+            Gmail
+        </a>
+        <a href="https://chatgpt.com" class="link-card">
+            <span class="link-icon">🧠</span>
+            ChatGPT
+        </a>
+        <a href="https://news.ycombinator.com" class="link-card">
+            <span class="link-icon">📰</span>
+            Hacker News
+        </a>
+    </div>
+
+    <script>
+        function updateTime() {
+            const now = new Date();
+            
+            // Update Clock
+            const timeString = now.toLocaleTimeString('en-US', { 
+                hour: '2-digit', 
+                minute: '2-digit',
+                hour12: false 
+            });
+            document.getElementById('clock').textContent = timeString;
+
+            // Update Date
+            const dateString = now.toLocaleDateString('en-US', { 
+                weekday: 'long', 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric' 
+            });
+            document.getElementById('date').textContent = dateString;
+        }
+
+        // Run immediately and then every second
+        updateTime();
+        setInterval(updateTime, 1000);
+    </script>
+</body>
+</html>
