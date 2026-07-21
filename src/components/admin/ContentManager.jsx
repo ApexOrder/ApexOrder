@@ -76,6 +76,10 @@ function emptyFor(section) {
   ]));
 }
 
+function formForRow(section, row) {
+  return { ...emptyFor(section), ...row };
+}
+
 function Field({ spec, value, onChange }) {
   const [key, label, type = 'text', options = []] = spec;
   const common = 'w-full rounded-lg border border-emerald-400/20 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-emerald-400/60';
@@ -122,13 +126,13 @@ export default function ContentManager() {
   useEffect(() => { setEditing(null); load(); }, [entity]);
 
   const startNew = () => { setEditing('new'); setForm(emptyFor(section)); };
-  const startEdit = (row) => { setEditing(row.id); setForm({ ...row }); };
+  const startEdit = (row) => { setEditing(row.id); setForm(formForRow(section, row)); };
   const cancel = () => { setEditing(null); setForm({}); };
 
   const save = async () => {
     setLoading(true); setMessage('');
     try {
-      const payload = { ...form };
+      const payload = formForRow(section, form);
       if (payload.date && !String(payload.date).endsWith('Z')) payload.date = new Date(payload.date).toISOString();
       if (editing === 'new') await base44.entities[entity].create(payload);
       else await base44.entities[entity].update(editing, payload);
