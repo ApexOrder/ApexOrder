@@ -1,5 +1,26 @@
 const DEFAULT_TIMEOUT_MS = 10000;
 
+const AMP_APPLICATION_STATES = Object.freeze({
+  [-1]: 'Undefined',
+  0: 'Stopped',
+  5: 'Pre-start',
+  7: 'Configuring',
+  10: 'Starting',
+  20: 'Ready',
+  30: 'Restarting',
+  40: 'Stopping',
+  45: 'Preparing for sleep',
+  50: 'Sleeping',
+  60: 'Waiting',
+  70: 'Installing',
+  75: 'Updating',
+  80: 'Awaiting user input',
+  100: 'Failed',
+  200: 'Suspended',
+  250: 'Maintenance',
+  999: 'Indeterminate',
+});
+
 function cleanBaseUrl(value) {
   const raw = String(value || '').trim().replace(/\/+$/, '');
   if (!raw) throw new Error('AMP instance URL is required.');
@@ -57,6 +78,28 @@ function firstText(...values) {
   return null;
 }
 
+function normaliseAmpApplicationState(value) {
+  const rawValue = value === undefined || value === null ? null : String(value).trim();
+  if (!rawValue) return { stateId: null, state: 'Unknown', online: false };
+
+  const numericState = Number(rawValue);
+  if (Number.isInteger(numericState)) {
+    return {
+      stateId: numericState,
+      state: AMP_APPLICATION_STATES[numericState] || `Unknown (${numericState})`,
+      online: numericState === 20,
+    };
+  }
+
+  const state = rawValue;
+  const stateLower = state.toLowerCase();
+  return {
+    stateId: null,
+    state,
+    online: ['ready', 'running', 'online', 'started'].some((candidate) => stateLower.includes(candidate)),
+  };
+}
+
 export function ampEnvironment() {
   const username = String(process.env.AMP_USERNAME || '').trim();
   const password = String(process.env.AMP_PASSWORD || '').trim();
@@ -108,9 +151,9 @@ export async function ampLogin(instanceUrl) {
 export function normaliseAmpStatus(rawStatus) {
   const raw = unwrap(rawStatus) || {};
   const metrics = raw.Metrics || raw.metrics || {};
-  const state = firstText(raw.State, raw.state, raw.ApplicationState, raw.applicationState, raw.Status, raw.status) || 'unknown';
-  const stateLower = state.toLowerCase();
-  const online = ['ready', 'running', 'online', 'started'].some((value) => stateLower.includes(value));
+  const applicationState = normaliseAmpApplicationState(
+    raw.State ?? raw.state ?? raw.ApplicationState ?? raw.applicationState ?? raw.Status ?? raw.status,
+  );
 
   const playersCurrent = firstNumber(
     raw.PlayerCount,
@@ -132,8 +175,9 @@ export function normaliseAmpStatus(rawStatus) {
   const uptimeSeconds = firstNumber(raw.Uptime, raw.uptime, raw.UptimeSeconds, raw.uptimeSeconds);
 
   return {
-    online,
-    state,
+    online: applicationState.online,
+    state: applicationState.state,
+    stateId: applicationState.stateId,
     playersCurrent,
     playersMax,
     cpuPercent,
