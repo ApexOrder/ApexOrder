@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { LogOut, RefreshCw, ShieldCheck, Activity, Settings, Database, LayoutDashboard, ExternalLink } from 'lucide-react';
+import { LogOut, RefreshCw, ShieldCheck, Activity, Settings, Database, LayoutDashboard, ExternalLink, Save } from 'lucide-react';
 import { useAuth } from '@/lib/AuthContext';
+import { useSiteSettings } from '@/lib/SiteSettingsContext';
+import { base44 } from '@/api/base44Client';
 import ContentManager from '@/components/admin/ContentManager';
 
 const siteLinks = [
@@ -26,9 +28,13 @@ function Card({ children }) {
 
 export default function Admin() {
   const { admin, isLoading, logoutAdmin } = useAuth();
+  const { settings: siteSettings, refreshSettings } = useSiteSettings();
   const [tab, setTab] = useState('content');
   const [audit, setAudit] = useState([]);
   const [settings, setSettings] = useState(null);
+  const [discordUrl, setDiscordUrl] = useState('');
+  const [savingDiscord, setSavingDiscord] = useState(false);
+  const [saveMessage, setSaveMessage] = useState('');
   const [error, setError] = useState('');
 
   const load = async () => {
@@ -40,6 +46,7 @@ export default function Admin() {
       ]);
       setAudit(nextAudit);
       setSettings(nextSettings);
+      await refreshSettings();
     } catch (err) {
       setError(err.message);
     }
@@ -48,6 +55,38 @@ export default function Admin() {
   useEffect(() => {
     if (admin) load();
   }, [admin]);
+
+  useEffect(() => {
+    setDiscordUrl(siteSettings?.discord_url || '');
+  }, [siteSettings?.discord_url]);
+
+  const saveDiscordUrl = async (event) => {
+    event.preventDefault();
+    setSaveMessage('');
+    setError('');
+
+    const value = discordUrl.trim();
+    if (!/^https?:\/\//i.test(value)) {
+      setError('Enter a complete Discord invite URL beginning with http:// or https://.');
+      return;
+    }
+
+    setSavingDiscord(true);
+    try {
+      const existing = await base44.entities.SiteSetting.get('global');
+      if (existing) {
+        await base44.entities.SiteSetting.update('global', { discord_url: value });
+      } else {
+        await base44.entities.SiteSetting.create({ id: 'global', discord_url: value });
+      }
+      await refreshSettings();
+      setSaveMessage('Discord URL saved. Every Discord button on the site now uses this link.');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSavingDiscord(false);
+    }
+  };
 
   const counts = useMemo(() => audit.reduce((result, item) => {
     result[item.action] = (result[item.action] || 0) + 1;
@@ -117,6 +156,7 @@ export default function Admin() {
         </nav>
 
         {error && <div className="mb-5 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">{error}</div>}
+        {saveMessage && <div className="mb-5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-300">{saveMessage}</div>}
 
         {tab === 'content' && <ContentManager />}
 
@@ -143,6 +183,26 @@ export default function Admin() {
 
         {tab === 'settings' && (
           <div className="grid gap-4 md:grid-cols-2">
+            <Card>
+              <h2 className="font-bold text-emerald-300">GLOBAL SITE LINKS</h2>
+              <p className="mt-2 text-sm text-gray-500">Update this once and every Discord button across ApexOrder will use the new invite.</p>
+              <form onSubmit={saveDiscordUrl} className="mt-5 space-y-3">
+                <label className="block text-xs font-bold uppercase tracking-wider text-gray-400" htmlFor="discord-url">Discord invite URL</label>
+                <input
+                  id="discord-url"
+                  type="url"
+                  value={discordUrl}
+                  onChange={(event) => setDiscordUrl(event.target.value)}
+                  placeholder="https://discord.gg/your-invite"
+                  className="w-full rounded-lg border border-white/10 bg-black/40 px-4 py-3 text-sm text-white outline-none transition focus:border-emerald-400/50"
+                  required
+                />
+                <button type="submit" disabled={savingDiscord} className="flex items-center gap-2 rounded-lg border border-emerald-400/40 bg-emerald-400/10 px-4 py-2.5 text-sm font-bold text-emerald-300 transition hover:bg-emerald-400/15 disabled:opacity-50">
+                  {savingDiscord ? <RefreshCw size={16} className="animate-spin" /> : <Save size={16} />}
+                  {savingDiscord ? 'SAVING…' : 'SAVE DISCORD URL'}
+                </button>
+              </form>
+            </Card>
             <Card><h2 className="font-bold text-emerald-300">AUTHENTICATION</h2><dl className="mt-4 space-y-3 text-sm"><div><dt className="text-gray-500">Cloudflare admin</dt><dd>{settings?.cloudflareAccess ? 'Configured' : 'Not configured'}</dd></div><div><dt className="text-gray-500">Discord members</dt><dd>{settings?.discordAuth ? 'Configured' : 'Not configured'}</dd></div><div><dt className="text-gray-500">Discord Client ID</dt><dd className="break-all">{settings?.discordClientId || '—'}</dd></div><div><dt className="text-gray-500">Redirect URI</dt><dd className="break-all">{settings?.discordRedirectUri || '—'}</dd></div></dl></Card>
             <Card><h2 className="font-bold text-emerald-300">SYSTEM</h2><dl className="mt-4 space-y-3 text-sm"><div><dt className="text-gray-500">Application URL</dt><dd>{settings?.appBaseUrl || '—'}</dd></div><div><dt className="text-gray-500">Member session length</dt><dd>{settings?.sessionDays || '—'} days</dd></div><div><dt className="text-gray-500">Database</dt><dd className="break-all text-xs">{settings?.databasePath || '—'}</dd></div></dl></Card>
           </div>
