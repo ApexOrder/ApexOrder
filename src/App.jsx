@@ -4,6 +4,7 @@ import { queryClientInstance } from '@/lib/query-client';
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider } from '@/lib/AuthContext';
+import { SiteSettingsProvider } from '@/lib/SiteSettingsContext';
 import ScrollToTop from './components/ScrollToTop';
 import Home from './pages/Home';
 import Servers from './pages/Servers';
@@ -53,11 +54,13 @@ export default function App() {
   return (
     <AuthProvider>
       <QueryClientProvider client={queryClientInstance}>
-        <Router>
-          <ScrollToTop />
-          <AppRoutes />
-        </Router>
-        <Toaster />
+        <SiteSettingsProvider>
+          <Router>
+            <ScrollToTop />
+            <AppRoutes />
+          </Router>
+          <Toaster />
+        </SiteSettingsProvider>
       </QueryClientProvider>
     </AuthProvider>
   );
