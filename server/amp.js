@@ -72,15 +72,33 @@ export async function ampLogin(instanceUrl) {
   const credentials = ampEnvironment();
   if (!credentials.configured) throw new Error('AMP username and password are not configured on the ApexOrder server.');
 
-  const response = unwrap(await postJson(`${baseUrl}/API/Core/Login`, {
+  const response = await postJson(`${baseUrl}/API/Core/Login`, {
     username: credentials.username,
     password: credentials.password,
+    token: '',
     rememberMe: false,
-  }));
+  });
+
+  if (response?.success === false) {
+    const reason = firstText(
+      response?.resultReason,
+      response?.reason,
+      response?.Reason,
+      response?.message,
+      response?.Message,
+    );
+    throw new Error(reason || 'AMP rejected the supplied username or password.');
+  }
 
   const sessionId = firstText(response?.sessionID, response?.sessionId, response?.SessionID, response?.session_id);
   if (!sessionId) {
-    const reason = firstText(response?.reason, response?.Reason, response?.message, response?.Message);
+    const reason = firstText(
+      response?.resultReason,
+      response?.reason,
+      response?.Reason,
+      response?.message,
+      response?.Message,
+    );
     throw new Error(reason || 'AMP login succeeded but did not return a session ID.');
   }
 
