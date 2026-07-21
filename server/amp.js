@@ -60,24 +60,21 @@ function firstText(...values) {
 export function ampEnvironment() {
   const username = String(process.env.AMP_USERNAME || '').trim();
   const password = String(process.env.AMP_PASSWORD || '').trim();
-  const token = String(process.env.AMP_TOKEN || '').trim();
   return {
     username,
     password,
-    token,
-    configured: Boolean(username && (password || token)),
+    configured: Boolean(username && password),
   };
 }
 
 export async function ampLogin(instanceUrl) {
   const baseUrl = cleanBaseUrl(instanceUrl);
   const credentials = ampEnvironment();
-  if (!credentials.configured) throw new Error('AMP credentials are not configured on the ApexOrder server.');
+  if (!credentials.configured) throw new Error('AMP username and password are not configured on the ApexOrder server.');
 
   const response = unwrap(await postJson(`${baseUrl}/API/Core/Login`, {
     username: credentials.username,
     password: credentials.password,
-    token: credentials.token,
     rememberMe: false,
   }));
 
