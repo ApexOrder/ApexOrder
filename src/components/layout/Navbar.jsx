@@ -1,18 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Menu, X, ChevronDown, LogIn } from 'lucide-react';
+import { Menu, X, ChevronDown } from 'lucide-react';
 
 const navLinks = [
   { label: 'HOME', path: '/' },
-  { 
-    label: 'SERVERS', 
+  {
+    label: 'SERVERS',
     path: '/servers',
     dropdown: [
       { label: 'Events', path: '/events' }
     ]
   },
-  { 
-    label: 'COMMUNITY', 
+  {
+    label: 'COMMUNITY',
     path: '/community',
     dropdown: [
       { label: 'Stats', path: '/stats' },
@@ -21,8 +21,8 @@ const navLinks = [
       { label: 'Recruitment', path: '/recruitment' }
     ]
   },
-  { 
-    label: 'NEWS', 
+  {
+    label: 'NEWS',
     path: '/news',
     dropdown: [
       { label: 'Changelog', path: '/changelog' }
@@ -107,14 +107,6 @@ export default function Navbar() {
               <span className="w-2 h-2 rounded-full animate-pulse" style={{backgroundColor:'#10FF8B', boxShadow:'0 0 6px #10FF8B'}} />
               SINCE 2007
             </div>
-            <Link
-              to="/login"
-              className="inline-flex items-center gap-2 px-4 py-2 font-bold text-xs tracking-[0.15em] rounded transition-all duration-300"
-              style={{ border: '1px solid rgba(88,101,242,0.7)', color: '#b9c0ff', background: 'rgba(88,101,242,0.08)' }}
-              title="Member login"
-            >
-              <LogIn size={14} /> LOGIN
-            </Link>
             <a
               href="https://discord.gg/apexorder"
               target="_blank"
@@ -147,10 +139,7 @@ export default function Navbar() {
                 )}
               </div>
             ))}
-            <div className="pt-4 border-t border-gray-800 mt-4 space-y-3">
-              <Link to="/login" className="flex items-center justify-center gap-2 px-5 py-3 border border-indigo-400/50 text-indigo-200 font-bold text-sm tracking-wider rounded">
-                <LogIn size={16} /> MEMBER LOGIN
-              </Link>
+            <div className="pt-4 border-t border-gray-800 mt-4">
               <a href="https://discord.gg/apexorder" target="_blank" rel="noopener noreferrer" className="block text-center px-5 py-3 border border-emerald-glow/50 text-emerald-glow font-bold text-sm tracking-wider rounded">JOIN US</a>
             </div>
           </div>
