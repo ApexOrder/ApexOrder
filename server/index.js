@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import Database from 'better-sqlite3';
 import express from 'express';
-import { OAuth2Client } from 'google-auth-library';
+import { createRemoteJWKSet, jwtVerify } from 'jose';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -12,22 +12,15 @@ const projectRoot = path.resolve(__dirname, '..');
 const dataDir = path.resolve(process.env.DATA_DIR || path.join(projectRoot, 'data'));
 const databasePath = path.join(dataDir, 'apexorder.sqlite');
 const port = Number(process.env.PORT || 3001);
-const googleClientId = String(process.env.GOOGLE_CLIENT_ID || '').trim();
-const sessionDays = Math.max(1, Number(process.env.SESSION_DAYS || 7));
+const cloudflareTeamDomain = String(process.env.CLOUDFLARE_ACCESS_TEAM_DOMAIN || '')
+  .trim()
+  .replace(/\/$/, '');
+const cloudflareAudience = String(process.env.CLOUDFLARE_ACCESS_AUD || '').trim();
 const isProduction = process.env.NODE_ENV === 'production';
-const adminEmails = new Set(
-  String(process.env.ADMIN_EMAILS || '')
-    .split(',')
-    .map((email) => email.trim().toLowerCase())
-    .filter(Boolean)
-);
+const accessConfigured = Boolean(cloudflareTeamDomain && cloudflareAudience);
 
-if (isProduction && !googleClientId) {
-  console.warn('GOOGLE_CLIENT_ID is not configured. Admin login is disabled.');
-}
-
-if (isProduction && adminEmails.size === 0) {
-  console.warn('ADMIN_EMAILS is empty. No Google account can access the admin panel.');
+if (isProduction && !accessConfigured) {
+  console.warn('Cloudflare Access is not configured. Admin API operations will be denied.');
 }
 
 fs.mkdirSync(dataDir, { recursive: true });
@@ -35,7 +28,6 @@ fs.mkdirSync(dataDir, { recursive: true });
 const db = new Database(databasePath);
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
-
 db.exec(`
   CREATE TABLE IF NOT EXISTS entities (
     entity_type TEXT NOT NULL,
@@ -45,21 +37,8 @@ db.exec(`
     updated_at TEXT NOT NULL,
     PRIMARY KEY (entity_type, id)
   );
-
   CREATE INDEX IF NOT EXISTS idx_entities_type_created
     ON entities (entity_type, created_at DESC);
-
-  CREATE TABLE IF NOT EXISTS admin_sessions (
-    token_hash TEXT PRIMARY KEY,
-    email TEXT NOT NULL,
-    name TEXT,
-    picture TEXT,
-    created_at TEXT NOT NULL,
-    expires_at TEXT NOT NULL
-  );
-
-  CREATE INDEX IF NOT EXISTS idx_admin_sessions_expiry
-    ON admin_sessions (expires_at);
 `);
 
 const listEntities = db.prepare(`
@@ -85,19 +64,10 @@ const deleteEntity = db.prepare(`
   DELETE FROM entities
   WHERE entity_type = ? AND id = ?
 `);
-const insertSession = db.prepare(`
-  INSERT INTO admin_sessions (token_hash, email, name, picture, created_at, expires_at)
-  VALUES (@tokenHash, @email, @name, @picture, @createdAt, @expiresAt)
-`);
-const getSession = db.prepare(`
-  SELECT email, name, picture, expires_at
-  FROM admin_sessions
-  WHERE token_hash = ?
-`);
-const deleteSession = db.prepare('DELETE FROM admin_sessions WHERE token_hash = ?');
-const deleteExpiredSessions = db.prepare('DELETE FROM admin_sessions WHERE expires_at <= ?');
-const googleClient = googleClientId ? new OAuth2Client(googleClientId) : null;
-const sessionCookieName = 'apexorder_admin';
+
+const JWKS = accessConfigured
+  ? createRemoteJWKSet(new URL(`${cloudflareTeamDomain}/cdn-cgi/access/certs`))
+  : null;
 
 function normaliseEntityType(value) {
   const entityType = String(value || '').trim();
@@ -163,54 +133,47 @@ function parseCookies(header = '') {
   );
 }
 
-function hashSessionToken(token) {
-  return crypto.createHash('sha256').update(token).digest('hex');
+function getAccessToken(request) {
+  return (
+    request.headers['cf-access-jwt-assertion'] ||
+    parseCookies(request.headers.cookie || '').CF_Authorization ||
+    ''
+  );
 }
 
-function setSessionCookie(response, token, expiresAt) {
-  const attributes = [
-    `${sessionCookieName}=${encodeURIComponent(token)}`,
-    'Path=/',
-    'HttpOnly',
-    'SameSite=Lax',
-    `Expires=${expiresAt.toUTCString()}`,
-  ];
-  if (isProduction) attributes.push('Secure');
-  response.setHeader('Set-Cookie', attributes.join('; '));
-}
-
-function clearSessionCookie(response) {
-  const attributes = [
-    `${sessionCookieName}=`,
-    'Path=/',
-    'HttpOnly',
-    'SameSite=Lax',
-    'Expires=Thu, 01 Jan 1970 00:00:00 GMT',
-  ];
-  if (isProduction) attributes.push('Secure');
-  response.setHeader('Set-Cookie', attributes.join('; '));
-}
-
-function readAdminSession(request) {
-  deleteExpiredSessions.run(new Date().toISOString());
-  const token = parseCookies(request.headers.cookie)[sessionCookieName];
+async function readCloudflareUser(request) {
+  if (!JWKS || !accessConfigured) return null;
+  const token = String(getAccessToken(request));
   if (!token) return null;
-  const session = getSession.get(hashSessionToken(token));
-  if (!session || new Date(session.expires_at) <= new Date()) return null;
+
+  const { payload } = await jwtVerify(token, JWKS, {
+    issuer: cloudflareTeamDomain,
+    audience: cloudflareAudience,
+  });
+
+  const email = String(payload.email || '').trim().toLowerCase();
+  if (!email) return null;
+
   return {
-    id: session.email,
-    email: session.email,
-    full_name: session.name || session.email,
-    picture: session.picture || null,
+    id: String(payload.sub || email),
+    email,
+    full_name: String(payload.name || email),
     role: 'admin',
   };
 }
 
-function requireAdmin(request, response, next) {
-  const user = readAdminSession(request);
-  if (!user) return response.status(401).json({ error: 'Admin authentication required.' });
-  request.user = user;
-  next();
+async function requireAdmin(request, response, next) {
+  try {
+    const user = await readCloudflareUser(request);
+    if (!user) {
+      return response.status(401).json({ error: 'Cloudflare Access authentication required.' });
+    }
+    request.user = user;
+    next();
+  } catch (error) {
+    console.error('[Auth] Cloudflare Access token validation failed:', error.message);
+    response.status(401).json({ error: 'Invalid Cloudflare Access session.' });
+  }
 }
 
 const app = express();
@@ -219,71 +182,18 @@ app.set('trust proxy', 1);
 app.use(express.json({ limit: '2mb' }));
 
 app.get('/api/health', (_request, response) => {
-  response.json({ ok: true, database: databasePath, googleAuth: Boolean(googleClientId) });
+  response.json({
+    ok: true,
+    database: databasePath,
+    cloudflareAccess: accessConfigured,
+  });
 });
 
-app.get('/api/auth/config', (_request, response) => {
-  response.json({ googleClientId, enabled: Boolean(googleClientId && adminEmails.size) });
+app.get('/api/auth/me', requireAdmin, (request, response) => {
+  response.json(request.user);
 });
 
-app.get('/api/auth/me', (request, response) => {
-  const user = readAdminSession(request);
-  if (!user) return response.status(401).json({ error: 'Not authenticated.' });
-  response.json(user);
-});
-
-app.post('/api/auth/google', async (request, response) => {
-  try {
-    if (!googleClient || !googleClientId) {
-      return response.status(503).json({ error: 'Google authentication is not configured.' });
-    }
-
-    const credential = String(request.body?.credential || '');
-    if (!credential) return response.status(400).json({ error: 'Missing Google credential.' });
-
-    const ticket = await googleClient.verifyIdToken({
-      idToken: credential,
-      audience: googleClientId,
-    });
-    const payload = ticket.getPayload();
-    const email = String(payload?.email || '').trim().toLowerCase();
-
-    if (!payload?.email_verified || !email) {
-      return response.status(401).json({ error: 'Google email address could not be verified.' });
-    }
-    if (!adminEmails.has(email)) {
-      return response.status(403).json({ error: 'This Google account is not authorised as an administrator.' });
-    }
-
-    const token = crypto.randomBytes(32).toString('base64url');
-    const createdAt = new Date();
-    const expiresAt = new Date(createdAt.getTime() + sessionDays * 24 * 60 * 60 * 1000);
-    insertSession.run({
-      tokenHash: hashSessionToken(token),
-      email,
-      name: payload.name || email,
-      picture: payload.picture || null,
-      createdAt: createdAt.toISOString(),
-      expiresAt: expiresAt.toISOString(),
-    });
-    setSessionCookie(response, token, expiresAt);
-    response.json({
-      id: email,
-      email,
-      full_name: payload.name || email,
-      picture: payload.picture || null,
-      role: 'admin',
-    });
-  } catch (error) {
-    console.error('[Auth] Google sign-in failed:', error);
-    response.status(401).json({ error: 'Google sign-in could not be verified.' });
-  }
-});
-
-app.post('/api/auth/logout', (request, response) => {
-  const token = parseCookies(request.headers.cookie)[sessionCookieName];
-  if (token) deleteSession.run(hashSessionToken(token));
-  clearSessionCookie(response);
+app.post('/api/auth/logout', (_request, response) => {
   response.status(204).end();
 });
 
@@ -391,4 +301,5 @@ app.use((error, _request, response, _next) => {
 app.listen(port, '0.0.0.0', () => {
   console.log(`ApexOrder running on http://0.0.0.0:${port}`);
   console.log(`SQLite database: ${databasePath}`);
+  console.log(`Cloudflare Access: ${accessConfigured ? 'configured' : 'not configured'}`);
 });
