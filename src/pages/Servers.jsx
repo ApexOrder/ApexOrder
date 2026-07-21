@@ -141,7 +141,7 @@ export default function Servers() {
 
     const timer = window.setInterval(() => {
       if (!document.hidden) loadLiveStats();
-    }, 30000);
+    }, 10000);
 
     return () => {
       cancelled = true;
