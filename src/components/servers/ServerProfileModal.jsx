@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Users, Map, Cpu, Copy, Check, Wifi, WifiOff } from 'lucide-react';
+import { X, Users, Map, Cpu, Copy, Check } from 'lucide-react';
 import CapacityBar from '@/components/ui/CapacityBar';
+import StatusBadge from '@/components/ui/StatusBadge';
 
 export default function ServerProfileModal({ server, onClose }) {
   const [copied, setCopied] = useState(false);
@@ -14,7 +15,6 @@ export default function ServerProfileModal({ server, onClose }) {
     }
   };
 
-  const isOnline = server.status === 'online';
   const mods = Array.isArray(server.mods) ? server.mods : (server.mods ? server.mods.split(',').map(m => m.trim()).filter(Boolean) : []);
 
   return (
@@ -25,10 +25,8 @@ export default function ServerProfileModal({ server, onClose }) {
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
       >
-        {/* Backdrop */}
         <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
 
-        {/* Modal */}
         <motion.div
           className="relative w-full max-w-lg z-10 rounded-xl overflow-hidden"
           initial={{ opacity: 0, scale: 0.92, y: 20 }}
@@ -37,7 +35,6 @@ export default function ServerProfileModal({ server, onClose }) {
           transition={{ type: 'spring', damping: 22, stiffness: 280 }}
           style={{ background: 'rgba(6,14,6,0.98)', border: '1px solid rgba(16,255,139,0.2)' }}
         >
-          {/* Hero image */}
           <div className="relative h-48 overflow-hidden">
             {server.image ? (
               <img src={server.image} alt={server.name} className="w-full h-full object-cover opacity-70" />
@@ -46,27 +43,21 @@ export default function ServerProfileModal({ server, onClose }) {
             )}
             <div className="absolute inset-0" style={{ background: 'linear-gradient(to top, rgba(6,14,6,1) 0%, rgba(6,14,6,0.3) 60%, transparent 100%)' }} />
 
-            {/* Tag */}
             <div className="absolute top-4 left-4 px-2 py-1 text-xs font-mono font-bold rounded"
               style={{ background: 'rgba(5,10,5,0.8)', border: '1px solid rgba(212,175,55,0.4)', color: '#D4AF37' }}>
               {server.tag}
             </div>
 
-            {/* Status */}
-            <div className="absolute top-4 right-12 flex items-center gap-1.5 px-2 py-1 rounded text-xs font-mono"
-              style={{ background: 'rgba(5,10,5,0.8)', border: `1px solid ${isOnline ? 'rgba(16,255,139,0.3)' : 'rgba(255,80,80,0.3)'}`, color: isOnline ? '#10FF8B' : '#ff5555' }}>
-              {isOnline ? <Wifi size={11} /> : <WifiOff size={11} />}
-              {isOnline ? 'ONLINE' : 'OFFLINE'}
+            <div className="absolute top-4 right-12">
+              <StatusBadge status={server.status} />
             </div>
 
-            {/* Close */}
             <button onClick={onClose} className="absolute top-3 right-3 w-7 h-7 rounded flex items-center justify-center transition-colors"
               style={{ background: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.6)' }}>
               <X size={14} />
             </button>
           </div>
 
-          {/* Content */}
           <div className="p-6">
             <h2 className="text-2xl font-heading font-bold mb-1" style={{ color: '#10FF8B', textShadow: '0 0 20px rgba(16,255,139,0.3)' }}>
               {server.name}
@@ -75,7 +66,6 @@ export default function ServerProfileModal({ server, onClose }) {
               <p className="text-sm leading-relaxed mb-5" style={{ color: 'rgba(255,255,255,0.5)' }}>{server.description}</p>
             )}
 
-            {/* Stats row */}
             <div className="grid grid-cols-2 gap-3 mb-5">
               <div className="rounded-lg p-3" style={{ background: 'rgba(16,255,139,0.04)', border: '1px solid rgba(16,255,139,0.1)' }}>
                 <div className="flex items-center gap-1.5 mb-1">
@@ -99,7 +89,6 @@ export default function ServerProfileModal({ server, onClose }) {
 
             <CapacityBar current={server.players?.current ?? 0} max={server.players?.max ?? 32} label="SERVER CAPACITY" />
 
-            {/* Mods */}
             {mods.length > 0 && (
               <div className="mt-5">
                 <div className="flex items-center gap-1.5 mb-2">
@@ -117,7 +106,6 @@ export default function ServerProfileModal({ server, onClose }) {
               </div>
             )}
 
-            {/* Join section */}
             {(server.ip || server.joinInstructions) && (
               <div className="mt-5 p-4 rounded-lg" style={{ background: 'rgba(16,255,139,0.04)', border: '1px solid rgba(16,255,139,0.12)' }}>
                 <div className="text-xs font-mono tracking-wider mb-3" style={{ color: 'rgba(16,255,139,0.5)' }}>HOW TO JOIN</div>
