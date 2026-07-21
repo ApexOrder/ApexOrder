@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { LogOut, RefreshCw, ShieldCheck, Activity, Settings, Database } from 'lucide-react';
+import { LogOut, RefreshCw, ShieldCheck, Activity, Settings, Database, LayoutDashboard } from 'lucide-react';
 import { useAuth } from '@/lib/AuthContext';
+import ContentManager from '@/components/admin/ContentManager';
 
 async function api(path) {
   const response = await fetch(path, { credentials: 'include' });
@@ -14,8 +15,8 @@ function Card({ children }) {
 }
 
 export default function Admin() {
-  const { admin, isLoading, refreshAdmin, logoutAdmin } = useAuth();
-  const [tab, setTab] = useState('overview');
+  const { admin, isLoading, logoutAdmin } = useAuth();
+  const [tab, setTab] = useState('content');
   const [audit, setAudit] = useState([]);
   const [settings, setSettings] = useState(null);
   const [error, setError] = useState('');
@@ -65,7 +66,7 @@ export default function Admin() {
   return (
     <div className="min-h-screen bg-[#050a05] text-white">
       <header className="sticky top-0 z-20 border-b border-emerald-400/10 bg-[#050a05]/95 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-4">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4">
           <div>
             <div className="text-sm font-black tracking-[0.22em] text-emerald-400">APEX ADMIN</div>
             <div className="mt-1 text-xs text-gray-500">Cloudflare verified · {admin.email}</div>
@@ -77,9 +78,10 @@ export default function Admin() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl px-4 py-6">
+      <main className="mx-auto max-w-7xl px-4 py-6">
         <nav className="mb-6 flex flex-wrap gap-2">
           {[
+            ['content', LayoutDashboard, 'Content Manager'],
             ['overview', Activity, 'Overview'],
             ['audit', Database, 'Audit Log'],
             ['settings', Settings, 'Settings'],
@@ -91,6 +93,8 @@ export default function Admin() {
         </nav>
 
         {error && <div className="mb-5 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">{error}</div>}
+
+        {tab === 'content' && <ContentManager />}
 
         {tab === 'overview' && (
           <div className="grid gap-4 md:grid-cols-3">
