@@ -1,93 +1,85 @@
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useState,
-} from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
 const AuthContext = createContext(null);
 
 async function apiRequest(path, options = {}) {
   const response = await fetch(path, {
     credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
+    headers: { 'Content-Type': 'application/json', ...options.headers },
     ...options,
   });
-
   if (response.status === 204) return null;
   const data = await response.json().catch(() => null);
-
-  if (!response.ok) {
-    throw new Error(data?.error || `Request failed with status ${response.status}`);
-  }
-
+  if (!response.ok) throw new Error(data?.error || `Request failed with status ${response.status}`);
   return data;
 }
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);
+  const [member, setMember] = useState(null);
+  const [admin, setAdmin] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [authError, setAuthError] = useState(null);
 
-  const refreshUser = useCallback(async () => {
+  const refreshMember = useCallback(async () => {
     try {
-      const nextUser = await apiRequest('/api/auth/me');
-      setUser(nextUser);
-      setAuthError(null);
-      return nextUser;
+      const next = await apiRequest('/api/member/me');
+      setMember(next);
+      return next;
     } catch {
-      setUser(null);
+      setMember(null);
+      return null;
+    }
+  }, []);
+
+  const refreshAdmin = useCallback(async () => {
+    if (!window.location.pathname.startsWith('/admin')) return null;
+    try {
+      const next = await apiRequest('/api/admin/me');
+      setAdmin(next);
+      return next;
+    } catch {
+      setAdmin(null);
       return null;
     }
   }, []);
 
   useEffect(() => {
-    refreshUser().finally(() => setIsLoading(false));
-  }, [refreshUser]);
+    Promise.all([refreshMember(), refreshAdmin()]).finally(() => setIsLoading(false));
+  }, [refreshMember, refreshAdmin]);
 
-  const logout = useCallback(() => {
-    setUser(null);
-    setAuthError(null);
+  const loginWithDiscord = useCallback((returnTo = window.location.pathname) => {
+    window.location.href = `/api/member/login?returnTo=${encodeURIComponent(returnTo)}`;
+  }, []);
+
+  const logoutMember = useCallback(async () => {
+    await apiRequest('/api/member/logout', { method: 'POST' }).catch(() => null);
+    setMember(null);
+    window.location.href = '/';
+  }, []);
+
+  const logoutAdmin = useCallback(() => {
+    setAdmin(null);
     window.location.href = '/cdn-cgi/access/logout';
   }, []);
 
-  const checkAuth = useCallback(async () => Boolean(await refreshUser()), [refreshUser]);
-  const navigateToLogin = useCallback(() => {
-    window.location.href = '/admin';
-  }, []);
-
-  const value = useMemo(
-    () => ({
-      user,
-      setUser,
-      isLoading,
-      loading: isLoading,
-      isLoadingAuth: isLoading,
-      isLoadingPublicSettings: false,
-      authError,
-      error: authError,
-      isAuthenticated: Boolean(user),
-      authenticated: Boolean(user),
-      logout,
-      refreshUser,
-      checkAuth,
-      navigateToLogin,
-    }),
-    [
-      user,
-      isLoading,
-      authError,
-      logout,
-      refreshUser,
-      checkAuth,
-      navigateToLogin,
-    ]
-  );
+  const value = useMemo(() => ({
+    member,
+    user: member,
+    admin,
+    isLoading,
+    loading: isLoading,
+    isLoadingAuth: isLoading,
+    isAuthenticated: Boolean(member),
+    authenticated: Boolean(member),
+    isAdminAuthenticated: Boolean(admin),
+    loginWithDiscord,
+    logout: logoutMember,
+    logoutMember,
+    logoutAdmin,
+    refreshMember,
+    refreshAdmin,
+    checkAuth: async () => Boolean(await refreshMember()),
+    navigateToLogin: () => loginWithDiscord(),
+  }), [member, admin, isLoading, loginWithDiscord, logoutMember, logoutAdmin, refreshMember, refreshAdmin]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
