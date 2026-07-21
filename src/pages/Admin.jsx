@@ -1,7 +1,17 @@
 import { useEffect, useMemo, useState } from 'react';
-import { LogOut, RefreshCw, ShieldCheck, Activity, Settings, Database, LayoutDashboard } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { LogOut, RefreshCw, ShieldCheck, Activity, Settings, Database, LayoutDashboard, ExternalLink } from 'lucide-react';
 import { useAuth } from '@/lib/AuthContext';
 import ContentManager from '@/components/admin/ContentManager';
+
+const siteLinks = [
+  ['Home', '/'],
+  ['Servers', '/servers'],
+  ['Community', '/community'],
+  ['News', '/news'],
+  ['Projects', '/projects'],
+  ['Store', '/store'],
+];
 
 async function api(path) {
   const response = await fetch(path, { credentials: 'include' });
@@ -72,8 +82,22 @@ export default function Admin() {
             <div className="mt-1 text-xs text-gray-500">Cloudflare verified · {admin.email}</div>
           </div>
           <div className="flex items-center gap-2">
+            <Link to="/" className="flex items-center gap-2 rounded-lg border border-emerald-400/30 bg-emerald-400/10 px-3 py-2 text-xs font-bold text-emerald-300 hover:bg-emerald-400/15">
+              <ExternalLink size={15} /> VIEW SITE
+            </Link>
             <button onClick={load} className="rounded-lg border border-white/10 p-2 text-gray-400 hover:text-white" title="Refresh"><RefreshCw size={17} /></button>
             <button onClick={logoutAdmin} className="flex items-center gap-2 rounded-lg border border-red-400/20 bg-red-400/5 px-3 py-2 text-xs font-bold text-red-300"><LogOut size={15} /> SIGN OUT</button>
+          </div>
+        </div>
+
+        <div className="border-t border-white/5">
+          <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3">
+            <span className="text-[10px] font-black uppercase tracking-[0.22em] text-gray-600">Website</span>
+            {siteLinks.map(([label, path]) => (
+              <Link key={path} to={path} className="text-xs font-bold uppercase tracking-wider text-gray-400 transition-colors hover:text-emerald-300">
+                {label}
+              </Link>
+            ))}
           </div>
         </div>
       </header>
