@@ -30,6 +30,7 @@ const navLinks = [
   },
   { label: 'PROJECTS', path: '/projects' },
   { label: 'STORE', path: '/store' },
+  { label: 'ADMIN', path: '/admin' },
 ];
 
 export default function Navbar() {

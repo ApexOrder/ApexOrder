@@ -3,12 +3,10 @@ import { Outlet, useLocation } from 'react-router-dom';
 import Navbar from './Navbar';
 import Footer from './Footer';
 import ParticleBackground from './ParticleBackground';
-import StoreMemberAccess from '@/components/store/StoreMemberAccess';
 
 export default function SiteLayout() {
   const location = useLocation();
   const isHome = location.pathname === '/';
-  const isStore = location.pathname === '/store';
 
   return (
     <div className="min-h-screen relative">
@@ -27,7 +25,6 @@ export default function SiteLayout() {
       {!isHome && <ParticleBackground />}
       <Navbar />
       <main className="relative z-10">
-        {isStore && <StoreMemberAccess />}
         <Outlet />
       </main>
       {!isHome && <Footer />}
