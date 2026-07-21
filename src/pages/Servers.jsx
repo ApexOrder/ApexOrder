@@ -3,7 +3,6 @@ import { motion } from 'framer-motion';
 import { Server, Filter, RefreshCw } from 'lucide-react';
 import SectionHeading from '@/components/ui/SectionHeading';
 import ServerCard from '@/components/servers/ServerCard';
-import { servers as staticServers } from '@/lib/serverData';
 import { base44 } from '@/api/base44Client';
 
 const filters = ['ALL', 'SURVIVAL', 'ROLEPLAY', 'SANDBOX', 'HARDCORE', 'FPS', 'STRATEGY'];
@@ -12,15 +11,15 @@ function dbServerToShape(s) {
   return {
     id: s.id,
     name: s.name,
-    tag: s.tag,
-    status: s.status,
-    description: s.description,
+    tag: s.tag || 'SURVIVAL',
+    status: s.status || 'offline',
+    description: s.description || '',
     image: s.image,
     players: { current: s.players_current || 0, max: s.players_max || 32 },
-    map: s.map,
+    map: s.map || '',
     mods: s.mods ? s.mods.split(',').map(m => m.trim()).filter(Boolean) : [],
-    ip: s.ip,
-    joinInstructions: s.join_instructions,
+    ip: s.ip || s.join_link || '',
+    joinInstructions: s.join_instructions || s.join_link || '',
     ampEnabled: Boolean(s.amp_enabled),
   };
 }
@@ -41,7 +40,9 @@ function mergeLiveStatus(server, live) {
 
 export default function Servers() {
   const [activeFilter, setActiveFilter] = useState('ALL');
-  const [servers, setServers] = useState(staticServers);
+  const [servers, setServers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(null);
 
@@ -51,7 +52,8 @@ export default function Servers() {
       const response = await fetch('/api/servers/live');
       if (!response.ok) throw new Error(`Live server status failed: ${response.status}`);
       const statuses = await response.json();
-      const byId = new Map(statuses.map(status => [status.serverId, status]));
+      const safeStatuses = Array.isArray(statuses) ? statuses : [];
+      const byId = new Map(safeStatuses.map(status => [status.serverId, status]));
       setServers(current => current.map(server => mergeLiveStatus(server, byId.get(server.id))));
       setLastUpdated(new Date());
     } catch (error) {
@@ -61,14 +63,31 @@ export default function Servers() {
     }
   };
 
+  const loadServers = async () => {
+    setLoading(true);
+    setLoadError('');
+    try {
+      const data = await base44.entities.Server.list('sort_order');
+      const records = Array.isArray(data) ? data : [];
+      setServers(records.map(dbServerToShape));
+    } catch (error) {
+      console.error('[Servers] Unable to load server records.', error);
+      setServers([]);
+      setLoadError('Unable to load the server list right now.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     let cancelled = false;
-    base44.entities.Server.list('sort_order').then(data => {
-      if (cancelled) return;
-      if (data.length > 0) setServers(data.map(dbServerToShape));
-    }).then(() => {
-      if (!cancelled) loadLiveStats();
-    });
+
+    const initialise = async () => {
+      await loadServers();
+      if (!cancelled) await loadLiveStats();
+    };
+
+    initialise();
 
     const timer = window.setInterval(() => {
       if (!document.hidden) loadLiveStats();
@@ -122,7 +141,7 @@ export default function Servers() {
             </span>
           </div>
           <div className="w-px h-4 bg-border" />
-          <button onClick={loadLiveStats} disabled={refreshing} className="flex items-center gap-2 text-muted-foreground hover:text-emerald-glow transition-colors disabled:opacity-50">
+          <button onClick={loadLiveStats} disabled={refreshing || loading} className="flex items-center gap-2 text-muted-foreground hover:text-emerald-glow transition-colors disabled:opacity-50">
             <RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} />
             {refreshing ? 'REFRESHING' : lastUpdated ? `LIVE · ${lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'REFRESH LIVE'}
           </button>
@@ -130,16 +149,32 @@ export default function Servers() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filtered.map((server, index) => (
-            <ServerCard key={server.id} server={server} index={index} />
-          ))}
-        </div>
-
-        {filtered.length === 0 && (
+        {loading ? (
           <div className="text-center py-16">
-            <p className="text-muted-foreground font-mono">No servers match this filter.</p>
+            <RefreshCw size={22} className="mx-auto mb-4 animate-spin text-emerald-glow" />
+            <p className="text-muted-foreground font-mono">Loading servers…</p>
           </div>
+        ) : loadError ? (
+          <div className="text-center py-16">
+            <p className="text-red-300 font-mono">{loadError}</p>
+            <button onClick={loadServers} className="mt-4 text-xs font-mono text-emerald-glow hover:underline">TRY AGAIN</button>
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {filtered.map((server, index) => (
+                <ServerCard key={server.id} server={server} index={index} />
+              ))}
+            </div>
+
+            {filtered.length === 0 && (
+              <div className="text-center py-16">
+                <p className="text-muted-foreground font-mono">
+                  {servers.length === 0 ? 'No servers have been added yet.' : 'No servers match this filter.'}
+                </p>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
