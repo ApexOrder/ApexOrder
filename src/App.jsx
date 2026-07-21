@@ -11,7 +11,7 @@ import Community from './pages/Community';
 import Rules from './pages/Rules';
 import Downloads from './pages/Downloads';
 import Projects from './pages/Projects';
-import Store from './pages/Store';
+import StoreWithMemberLogin from './pages/StoreWithMemberLogin';
 import Events from './pages/Events';
 import Stats from './pages/Stats';
 import Admin from './pages/Admin';
@@ -33,7 +33,7 @@ function AppRoutes() {
         <Route path="/rules" element={<Rules />} />
         <Route path="/downloads" element={<Downloads />} />
         <Route path="/projects" element={<Projects />} />
-        <Route path="/store" element={<Store />} />
+        <Route path="/store" element={<StoreWithMemberLogin />} />
         <Route path="/events" element={<Events />} />
         <Route path="/stats" element={<Stats />} />
         <Route path="/changelog" element={<Changelog />} />
