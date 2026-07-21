@@ -122,9 +122,29 @@ function collectNamedMetrics(root) {
       continue;
     }
 
+    for (const [key, value] of Object.entries(current)) {
+      if (value && typeof value === 'object' && !Array.isArray(value)) {
+        const rawValue = value.RawValue ?? value.rawValue ?? value.Value ?? value.value;
+        const maxValue = value.MaxValue ?? value.maxValue;
+        const percent = value.Percent ?? value.percent;
+        const units = firstText(value.Units, value.units);
+
+        if (rawValue !== undefined && rawValue !== null) {
+          metrics[normaliseKey(key)] = { rawValue, maxValue, percent, units };
+        }
+      }
+    }
+
     const name = firstText(current.Name, current.name, current.MetricName, current.metricName, current.Label, current.label);
-    const value = current.Value ?? current.value ?? current.RawValue ?? current.rawValue;
-    if (name && value !== undefined && value !== null) metrics[normaliseKey(name)] = value;
+    const rawValue = current.RawValue ?? current.rawValue ?? current.Value ?? current.value;
+    if (name && rawValue !== undefined && rawValue !== null) {
+      metrics[normaliseKey(name)] = {
+        rawValue,
+        maxValue: current.MaxValue ?? current.maxValue,
+        percent: current.Percent ?? current.percent,
+        units: firstText(current.Units, current.units),
+      };
+    }
 
     for (const valueToVisit of Object.values(current)) {
       if (valueToVisit && typeof valueToVisit === 'object') queue.push(valueToVisit);
@@ -134,23 +154,20 @@ function collectNamedMetrics(root) {
   return metrics;
 }
 
-function metricValue(metrics, ...names) {
+function metricObject(metrics, ...names) {
   for (const name of names) {
     const value = metrics[normaliseKey(name)];
-    if (value !== undefined && value !== null && value !== '') return value;
+    if (value !== undefined && value !== null) return value;
   }
   return null;
 }
 
-function normaliseMemoryBytes(value) {
+function normaliseMemoryBytes(value, units = '') {
   if (value === undefined || value === null || value === '') return null;
-  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
-
-  const text = String(value).trim();
-  const number = Number.parseFloat(text.replace(/,/g, ''));
+  const number = Number.parseFloat(String(value).replace(/,/g, ''));
   if (!Number.isFinite(number)) return null;
 
-  const unit = text.toLowerCase();
+  const unit = String(units || value).toLowerCase();
   if (unit.includes('tib') || unit.includes('tb')) return Math.round(number * 1024 ** 4);
   if (unit.includes('gib') || unit.includes('gb')) return Math.round(number * 1024 ** 3);
   if (unit.includes('mib') || unit.includes('mb')) return Math.round(number * 1024 ** 2);
@@ -162,6 +179,27 @@ function normalisePercent(value) {
   if (value === undefined || value === null || value === '') return null;
   const number = Number.parseFloat(String(value).replace('%', '').trim());
   return Number.isFinite(number) ? number : null;
+}
+
+function normaliseUptimeSeconds(value) {
+  if (value === undefined || value === null || value === '') return null;
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+
+  const text = String(value).trim();
+  if (/^\d+(?:\.\d+)?$/.test(text)) return Number(text);
+
+  const parts = text.split(':').map((part) => Number(part));
+  if (parts.some((part) => !Number.isFinite(part))) return null;
+
+  if (parts.length === 4) {
+    const [days, hours, minutes, seconds] = parts;
+    return days * 86400 + hours * 3600 + minutes * 60 + seconds;
+  }
+  if (parts.length === 3) {
+    const [hours, minutes, seconds] = parts;
+    return hours * 3600 + minutes * 60 + seconds;
+  }
+  return null;
 }
 
 function normaliseAmpApplicationState(value) {
@@ -227,32 +265,34 @@ export function normaliseAmpStatus(...responses) {
   const combined = { sources };
   const namedMetrics = collectNamedMetrics(combined);
 
-  const stateValue = findDeepValue(combined, ['State', 'ApplicationState', 'Status']);
+  const stateValue = findDeepValue(combined, ['State', 'ApplicationState']);
   const applicationState = normaliseAmpApplicationState(stateValue);
 
+  const activeUsers = metricObject(namedMetrics, 'Active Users', 'Players', 'Player Count', 'Current Players');
+  const cpu = metricObject(namedMetrics, 'CPU Usage', 'CPU', 'Processor Usage');
+  const memory = metricObject(namedMetrics, 'Memory Usage', 'Memory', 'RAM Usage');
+
   const playersCurrent = firstNumber(
-    findDeepValue(combined, ['PlayerCount', 'PlayersCurrent', 'CurrentPlayers', 'ActiveUsers']),
-    metricValue(namedMetrics, 'Active Users', 'Players', 'Player Count', 'Current Players'),
+    findDeepValue(combined, ['PlayerCount', 'PlayersCurrent', 'CurrentPlayers']),
+    activeUsers?.rawValue,
   );
 
   const playersMax = firstNumber(
-    findDeepValue(combined, ['MaxPlayers', 'PlayersMax', 'PlayerLimit', 'MaximumUsers']),
-    metricValue(namedMetrics, 'Maximum Users', 'Max Players', 'Player Limit'),
+    findDeepValue(combined, ['MaxPlayers', 'PlayersMax', 'PlayerLimit']),
+    activeUsers?.maxValue,
   );
 
   const cpuPercent = normalisePercent(
-    findDeepValue(combined, ['CPUUsage', 'CPUPercent', 'ProcessorUsage'])
-      ?? metricValue(namedMetrics, 'CPU Usage', 'CPU', 'Processor Usage'),
+    cpu?.percent ?? cpu?.rawValue ?? findDeepValue(combined, ['CPUPercent', 'ProcessorUsage']),
   );
 
   const memoryBytes = normaliseMemoryBytes(
-    findDeepValue(combined, ['MemoryUsage', 'MemoryBytes', 'RAMUsage'])
-      ?? metricValue(namedMetrics, 'Memory Usage', 'Memory', 'RAM Usage'),
+    memory?.rawValue ?? findDeepValue(combined, ['MemoryBytes', 'RAMUsage']),
+    memory?.units,
   );
 
-  const uptimeSeconds = firstNumber(
+  const uptimeSeconds = normaliseUptimeSeconds(
     findDeepValue(combined, ['UptimeSeconds', 'Uptime', 'RunningFor']),
-    metricValue(namedMetrics, 'Uptime', 'Running Time'),
   );
 
   return {
@@ -264,18 +304,9 @@ export function normaliseAmpStatus(...responses) {
     cpuPercent,
     memoryBytes,
     uptimeSeconds,
-    map: firstText(
-      findDeepValue(combined, ['CurrentMap', 'MapName', 'Map']),
-      metricValue(namedMetrics, 'Map', 'Current Map'),
-    ),
-    version: firstText(
-      findDeepValue(combined, ['ApplicationVersion', 'GameVersion', 'Version']),
-      metricValue(namedMetrics, 'Version', 'Game Version'),
-    ),
-    name: firstText(
-      findDeepValue(combined, ['InstanceName', 'FriendlyName', 'ServerName', 'DisplayName']),
-      metricValue(namedMetrics, 'Server Name', 'Instance Name'),
-    ),
+    map: firstText(findDeepValue(combined, ['CurrentMap', 'MapName', 'Map'])),
+    version: firstText(findDeepValue(combined, ['ApplicationVersion', 'GameVersion', 'Version'])),
+    name: firstText(findDeepValue(combined, ['InstanceName', 'FriendlyName', 'ServerName', 'DisplayName'])),
     fetchedAt: new Date().toISOString(),
   };
 }
@@ -286,7 +317,13 @@ export async function getAmpStatus(instanceUrl) {
 
   const [statusResult, updatesResult] = await Promise.allSettled([
     postJson(`${baseUrl}/API/Core/GetStatus`, auth),
-    postJson(`${baseUrl}/API/Core/GetUpdates`, auth),
+    postJson(`${baseUrl}/API/Core/GetUpdates`, {
+      ...auth,
+      LastMessageSerial: 0,
+      LastMetricsSerial: 0,
+      LastEventSerial: 0,
+      LastStateSerial: 0,
+    }),
   ]);
 
   if (statusResult.status === 'rejected' && updatesResult.status === 'rejected') {
