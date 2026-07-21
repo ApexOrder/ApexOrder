@@ -9,22 +9,24 @@ import {
 
 const AuthContext = createContext(null);
 
-const STORAGE_KEY = 'apexorder_user';
+async function apiRequest(path, options = {}) {
+  const response = await fetch(path, {
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+    ...options,
+  });
 
-function readStoredUser() {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
+  if (response.status === 204) return null;
+  const data = await response.json().catch(() => null);
 
-    if (!stored) {
-      return null;
-    }
-
-    return JSON.parse(stored);
-  } catch (error) {
-    console.error('[Auth] Could not read stored user:', error);
-    localStorage.removeItem(STORAGE_KEY);
-    return null;
+  if (!response.ok) {
+    throw new Error(data?.error || `Request failed with status ${response.status}`);
   }
+
+  return data;
 }
 
 export function AuthProvider({ children }) {
@@ -32,101 +34,90 @@ export function AuthProvider({ children }) {
   const [isLoading, setIsLoading] = useState(true);
   const [authError, setAuthError] = useState(null);
 
-  useEffect(() => {
+  const refreshUser = useCallback(async () => {
     try {
-      setUser(readStoredUser());
-    } catch (error) {
-      console.error('[Auth] Initialisation failed:', error);
-      setAuthError(error);
-    } finally {
-      setIsLoading(false);
+      const nextUser = await apiRequest('/api/auth/me');
+      setUser(nextUser);
+      setAuthError(null);
+      return nextUser;
+    } catch {
+      setUser(null);
+      return null;
     }
   }, []);
 
-  const login = useCallback(async (credentials = {}) => {
+  useEffect(() => {
+    refreshUser().finally(() => setIsLoading(false));
+  }, [refreshUser]);
+
+  const loginWithGoogle = useCallback(async (credential) => {
     setAuthError(null);
 
-    /*
-     * Temporary local compatibility login.
-     *
-     * This will be replaced with:
-     * POST /api/auth/login
-     *
-     * Do not treat this as secure authentication.
-     */
-    const nextUser = {
-      id: 'local-admin',
-      email: credentials.email || 'admin@apexorder.local',
-      full_name: credentials.full_name || 'ApexOrder Admin',
-      role: 'admin',
-    };
-
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(nextUser));
-    setUser(nextUser);
-
-    return nextUser;
+    try {
+      const nextUser = await apiRequest('/api/auth/google', {
+        method: 'POST',
+        body: JSON.stringify({ credential }),
+      });
+      setUser(nextUser);
+      return nextUser;
+    } catch (error) {
+      setUser(null);
+      setAuthError(error);
+      throw error;
+    }
   }, []);
 
   const logout = useCallback(async () => {
-    localStorage.removeItem(STORAGE_KEY);
-    setUser(null);
-    setAuthError(null);
+    try {
+      await apiRequest('/api/auth/logout', { method: 'POST' });
+    } finally {
+      setUser(null);
+      setAuthError(null);
+    }
   }, []);
 
-  const refreshUser = useCallback(async () => {
-    const storedUser = readStoredUser();
-    setUser(storedUser);
-    return storedUser;
-  }, []);
-
-  const checkAuth = useCallback(async () => {
-    return Boolean(readStoredUser());
+  const checkAuth = useCallback(async () => Boolean(await refreshUser()), [refreshUser]);
+  const navigateToLogin = useCallback(() => {
+    const returnUrl = `${window.location.pathname}${window.location.search}`;
+    window.location.href = `/login?returnUrl=${encodeURIComponent(returnUrl)}`;
   }, []);
 
   const value = useMemo(
     () => ({
       user,
       setUser,
-
       isLoading,
       loading: isLoading,
-
+      isLoadingAuth: isLoading,
+      isLoadingPublicSettings: false,
       authError,
       error: authError,
-
       isAuthenticated: Boolean(user),
       authenticated: Boolean(user),
-
-      login,
+      loginWithGoogle,
       logout,
       refreshUser,
       checkAuth,
+      navigateToLogin,
     }),
     [
       user,
       isLoading,
       authError,
-      login,
+      loginWithGoogle,
       logout,
       refreshUser,
       checkAuth,
+      navigateToLogin,
     ]
   );
 
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {
   const context = useContext(AuthContext);
-
-  if (!context) {
-    throw new Error('useAuth must be used inside an AuthProvider.');
-  }
-
+  if (!context) throw new Error('useAuth must be used inside an AuthProvider.');
   return context;
 }
 
