@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Server, Filter } from 'lucide-react';
+import { Server, Filter, RefreshCw } from 'lucide-react';
 import SectionHeading from '@/components/ui/SectionHeading';
 import ServerCard from '@/components/servers/ServerCard';
 import { servers as staticServers } from '@/lib/serverData';
@@ -21,17 +21,63 @@ function dbServerToShape(s) {
     mods: s.mods ? s.mods.split(',').map(m => m.trim()).filter(Boolean) : [],
     ip: s.ip,
     joinInstructions: s.join_instructions,
+    ampEnabled: Boolean(s.amp_enabled),
+  };
+}
+
+function mergeLiveStatus(server, live) {
+  if (!live) return server;
+  return {
+    ...server,
+    live,
+    status: live.available ? (live.online ? 'online' : 'offline') : server.status,
+    players: {
+      current: live.playersCurrent ?? server.players?.current ?? 0,
+      max: live.playersMax ?? server.players?.max ?? 0,
+    },
+    map: live.map || server.map,
   };
 }
 
 export default function Servers() {
   const [activeFilter, setActiveFilter] = useState('ALL');
   const [servers, setServers] = useState(staticServers);
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState(null);
+
+  const loadLiveStats = async () => {
+    setRefreshing(true);
+    try {
+      const response = await fetch('/api/servers/live');
+      if (!response.ok) throw new Error(`Live server status failed: ${response.status}`);
+      const statuses = await response.json();
+      const byId = new Map(statuses.map(status => [status.serverId, status]));
+      setServers(current => current.map(server => mergeLiveStatus(server, byId.get(server.id))));
+      setLastUpdated(new Date());
+    } catch (error) {
+      console.warn('[AMP] Unable to refresh live server statistics.', error);
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   useEffect(() => {
+    let cancelled = false;
     base44.entities.Server.list('sort_order').then(data => {
+      if (cancelled) return;
       if (data.length > 0) setServers(data.map(dbServerToShape));
+    }).then(() => {
+      if (!cancelled) loadLiveStats();
     });
+
+    const timer = window.setInterval(() => {
+      if (!document.hidden) loadLiveStats();
+    }, 30000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
   }, []);
 
   const filtered = activeFilter === 'ALL'
@@ -40,17 +86,12 @@ export default function Servers() {
 
   return (
     <div className="pt-24 pb-20">
-      {/* Header */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-12 relative z-10">
-        <SectionHeading
-          title="Game Servers"
-          subtitle="TACTICAL GRID"
-        />
+        <SectionHeading title="Game Servers" subtitle="TACTICAL GRID" />
         <p className="text-center text-muted-foreground max-w-2xl mx-auto -mt-8 mb-10">
           Our dedicated servers run 24/7 with active moderation, custom configurations, and regular updates. Pick your battlefield.
         </p>
 
-        {/* Filter bar */}
         <div className="flex flex-wrap items-center justify-center gap-2 mb-8">
           <Filter size={14} className="text-muted-foreground mr-2" />
           {filters.map(filter => (
@@ -68,8 +109,7 @@ export default function Servers() {
           ))}
         </div>
 
-        {/* Live status bar */}
-        <div className="flex items-center justify-center gap-6 mb-12 text-xs font-mono">
+        <div className="flex flex-wrap items-center justify-center gap-6 mb-12 text-xs font-mono">
           <div className="flex items-center gap-2">
             <Server size={14} className="text-emerald-glow" />
             <span className="text-muted-foreground">{servers.filter(s => s.status === 'online').length} SERVERS ONLINE</span>
@@ -81,10 +121,14 @@ export default function Servers() {
               {servers.reduce((sum, s) => sum + (s.players?.current ?? 0), 0)} PLAYERS ACTIVE
             </span>
           </div>
+          <div className="w-px h-4 bg-border" />
+          <button onClick={loadLiveStats} disabled={refreshing} className="flex items-center gap-2 text-muted-foreground hover:text-emerald-glow transition-colors disabled:opacity-50">
+            <RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} />
+            {refreshing ? 'REFRESHING' : lastUpdated ? `LIVE · ${lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'REFRESH LIVE'}
+          </button>
         </div>
       </div>
 
-      {/* Server grid */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filtered.map((server, index) => (
