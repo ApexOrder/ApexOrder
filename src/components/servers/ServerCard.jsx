@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Users, Map, ChevronRight, Copy, Check, Cpu, MemoryStick, Clock3, Radio } from 'lucide-react';
+import { Users, Map, ChevronRight, ExternalLink, Cpu, MemoryStick, Clock3, Radio } from 'lucide-react';
 import StatusBadge from '@/components/ui/StatusBadge';
 import CapacityBar from '@/components/ui/CapacityBar';
 import ServerProfileModal from './ServerProfileModal';
@@ -25,18 +25,8 @@ function formatUptime(seconds) {
 }
 
 export default function ServerCard({ server, index }) {
-  const [showJoin, setShowJoin] = useState(false);
-  const [copied, setCopied] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const live = server.live;
-
-  const handleCopy = () => {
-    if (server.ip) {
-      navigator.clipboard.writeText(server.ip);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
-  };
 
   return (
     <motion.div
@@ -139,33 +129,18 @@ export default function ServerCard({ server, index }) {
               VIEW PROFILE
               <ChevronRight size={14} />
             </button>
-            <button
-              onClick={() => setShowJoin(!showJoin)}
-              className="px-4 py-2.5 bg-obsidian-light border border-border text-muted-foreground font-semibold text-xs tracking-wider rounded hover:border-emerald-glow/30 hover:text-foreground transition-all flex items-center justify-center gap-2"
-            >
-              HOW TO JOIN
-              <ChevronRight size={14} className={`transition-transform ${showJoin ? 'rotate-90' : ''}`} />
-            </button>
+            {server.joinUrl && (
+              <a
+                href={server.joinUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-5 py-2.5 bg-emerald-glow border border-emerald-glow text-obsidian font-semibold text-xs tracking-wider rounded hover:bg-emerald-glow/90 transition-all flex items-center justify-center gap-2"
+              >
+                JOIN
+                <ExternalLink size={14} />
+              </a>
+            )}
           </div>
-
-          {showJoin && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              className="mt-4 p-4 bg-obsidian rounded-lg border border-border"
-            >
-              <p className="text-sm text-muted-foreground mb-3">{server.joinInstructions}</p>
-              {server.ip && (
-                <button
-                  onClick={handleCopy}
-                  className="w-full flex items-center justify-between px-3 py-2 bg-obsidian-light rounded border border-border hover:border-emerald-glow/30 transition-colors"
-                >
-                  <span className="font-mono text-sm text-emerald-glow">{server.ip}</span>
-                  {copied ? <Check size={14} className="text-emerald-glow" /> : <Copy size={14} className="text-muted-foreground" />}
-                </button>
-              )}
-            </motion.div>
-          )}
         </div>
       </div>
       {showProfile && <ServerProfileModal server={server} onClose={() => setShowProfile(false)} />}
