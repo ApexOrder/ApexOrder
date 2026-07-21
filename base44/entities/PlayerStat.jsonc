@@ -1,0 +1,56 @@
+{
+  "name": "PlayerStat",
+  "type": "object",
+  "properties": {
+    "player_name": {
+      "type": "string",
+      "title": "Player Name"
+    },
+    "server_id": {
+      "type": "string",
+      "title": "Server ID"
+    },
+    "game": {
+      "type": "string",
+      "title": "Game"
+    },
+    "kills": {
+      "type": "number",
+      "title": "Kills",
+      "default": 0
+    },
+    "deaths": {
+      "type": "number",
+      "title": "Deaths",
+      "default": 0
+    },
+    "playtime_hours": {
+      "type": "number",
+      "title": "Playtime (hours)",
+      "default": 0
+    },
+    "score": {
+      "type": "number",
+      "title": "Score",
+      "default": 0
+    },
+    "rank": {
+      "type": "number",
+      "title": "Rank Override",
+      "default": 0
+    },
+    "badge": {
+      "type": "string",
+      "title": "Badge (e.g. MVP, TOP KILLER)"
+    },
+    "avatar_url": {
+      "type": "string",
+      "title": "Avatar URL"
+    }
+  },
+  "required": [
+    "player_name",
+    "server_id",
+    "game"
+  ]
+}

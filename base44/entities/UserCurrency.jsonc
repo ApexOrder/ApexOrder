@@ -1,0 +1,28 @@
+{
+  "name": "UserCurrency",
+  "type": "object",
+  "properties": {
+    "user_id": {
+      "type": "string",
+      "title": "User ID"
+    },
+    "tokens": {
+      "type": "number",
+      "title": "Token Balance",
+      "default": 0
+    },
+    "lifetime_purchased": {
+      "type": "number",
+      "title": "Lifetime Tokens Purchased",
+      "default": 0
+    },
+    "lifetime_spent": {
+      "type": "number",
+      "title": "Lifetime Tokens Spent",
+      "default": 0
+    }
+  },
+  "required": [
+    "user_id"
+  ]
+}

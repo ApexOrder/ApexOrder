@@ -1,0 +1,40 @@
+{
+  "name": "UserInventory",
+  "type": "object",
+  "properties": {
+    "user_id": {
+      "type": "string",
+      "title": "User ID"
+    },
+    "discord_id": {
+      "type": "string",
+      "title": "Discord User ID"
+    },
+    "tokens": {
+      "type": "number",
+      "title": "Token Balance",
+      "default": 0
+    },
+    "items": {
+      "type": "string",
+      "title": "Owned Items (JSON string)"
+    },
+    "lifetime_purchased": {
+      "type": "number",
+      "title": "Lifetime USD Spent",
+      "default": 0
+    },
+    "lifetime_tokens_spent": {
+      "type": "number",
+      "title": "Lifetime Tokens Spent",
+      "default": 0
+    },
+    "subscription_items": {
+      "type": "string",
+      "title": "Active Subscription Items (JSON string with expiry dates)"
+    }
+  },
+  "required": [
+    "user_id"
+  ]
+}

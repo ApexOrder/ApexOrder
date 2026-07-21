@@ -1,0 +1,76 @@
+{
+  "name": "StoreItem",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "title": "Item Name"
+    },
+    "description": {
+      "type": "string"
+    },
+    "price_usd": {
+      "type": "number",
+      "title": "Price (USD)"
+    },
+    "token_price": {
+      "type": "number",
+      "title": "Token Price (optional)"
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "Ranks",
+        "Cosmetics",
+        "Bundles",
+        "Tokens",
+        "Merch",
+        "Other"
+      ],
+      "default": "Ranks"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "digital",
+        "physical"
+      ],
+      "default": "digital",
+      "title": "Item Type"
+    },
+    "image": {
+      "type": "string",
+      "title": "Image URL"
+    },
+    "badge": {
+      "type": "string",
+      "title": "Badge Label (e.g. POPULAR)"
+    },
+    "available": {
+      "type": "boolean",
+      "default": true
+    },
+    "sort_order": {
+      "type": "number",
+      "default": 0
+    },
+    "digital_delivery": {
+      "type": "string",
+      "title": "Digital Delivery Method (e.g. Discord role, in-game code)"
+    },
+    "shipping_required": {
+      "type": "boolean",
+      "default": false
+    },
+    "subscription_duration_days": {
+      "type": "number",
+      "title": "Subscription Duration (days, optional - for ranks/subscriptions)"
+    }
+  },
+  "required": [
+    "name",
+    "price_usd",
+    "category",
+    "type"
+  ]
+}

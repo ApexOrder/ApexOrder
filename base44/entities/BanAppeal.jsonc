@@ -1,0 +1,51 @@
+{
+  "name": "BanAppeal",
+  "type": "object",
+  "properties": {
+    "player_name": {
+      "type": "string",
+      "title": "In-Game Name"
+    },
+    "discord_tag": {
+      "type": "string",
+      "title": "Discord Tag"
+    },
+    "game": {
+      "type": "string",
+      "title": "Game"
+    },
+    "server": {
+      "type": "string",
+      "title": "Server"
+    },
+    "ban_reason": {
+      "type": "string",
+      "title": "Ban Reason (as shown)"
+    },
+    "appeal_text": {
+      "type": "string",
+      "title": "Appeal Statement"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "Pending",
+        "Approved",
+        "Denied",
+        "Under Review"
+      ],
+      "default": "Pending",
+      "title": "Status"
+    },
+    "admin_notes": {
+      "type": "string",
+      "title": "Admin Notes (internal)"
+    }
+  },
+  "required": [
+    "player_name",
+    "discord_tag",
+    "game",
+    "appeal_text"
+  ]
+}

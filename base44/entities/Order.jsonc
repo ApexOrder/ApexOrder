@@ -1,0 +1,69 @@
+{
+  "name": "Order",
+  "type": "object",
+  "properties": {
+    "user_id": {
+      "type": "string",
+      "title": "User ID"
+    },
+    "discord_id": {
+      "type": "string",
+      "title": "Discord ID (for account linking)"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "paid",
+        "processing",
+        "completed",
+        "refunded",
+        "cancelled"
+      ],
+      "default": "pending",
+      "title": "Order Status"
+    },
+    "items": {
+      "type": "string",
+      "title": "Order Items (JSON string)"
+    },
+    "total_usd": {
+      "type": "number",
+      "title": "Total (USD)"
+    },
+    "total_tokens": {
+      "type": "number",
+      "title": "Total Tokens Used",
+      "default": 0
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "digital",
+        "physical"
+      ],
+      "default": "digital",
+      "title": "Order Type"
+    },
+    "stripe_payment_intent": {
+      "type": "string",
+      "title": "Stripe Payment Intent ID"
+    },
+    "shipping_address": {
+      "type": "string",
+      "title": "Shipping Address (JSON string)"
+    },
+    "discord_username": {
+      "type": "string",
+      "title": "Discord Username (for digital delivery)"
+    },
+    "notes": {
+      "type": "string",
+      "title": "Order Notes"
+    }
+  },
+  "required": [
+    "user_id",
+    "total_usd"
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "name": "NewsPost",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string",
+      "title": "Title"
+    },
+    "summary": {
+      "type": "string",
+      "title": "Short Summary"
+    },
+    "content": {
+      "type": "string",
+      "title": "Full Content"
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "Announcement",
+        "Update",
+        "Event",
+        "Community",
+        "Other"
+      ],
+      "default": "Announcement",
+      "title": "Category"
+    },
+    "thumbnail": {
+      "type": "string",
+      "title": "Thumbnail Image URL"
+    },
+    "published": {
+      "type": "boolean",
+      "default": true,
+      "title": "Published"
+    }
+  },
+  "required": [
+    "title",
+    "content"
+  ]
+}

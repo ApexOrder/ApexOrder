@@ -1,0 +1,43 @@
+{
+  "name": "Changelog",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string",
+      "title": "Title"
+    },
+    "version": {
+      "type": "string",
+      "title": "Version (e.g. v1.2.0)"
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "Server Update",
+        "Mod Update",
+        "Bug Fix",
+        "New Feature",
+        "Announcement"
+      ],
+      "default": "Server Update",
+      "title": "Category"
+    },
+    "content": {
+      "type": "string",
+      "title": "Content (markdown or plain text)"
+    },
+    "game": {
+      "type": "string",
+      "title": "Game (optional)"
+    },
+    "published": {
+      "type": "boolean",
+      "default": true,
+      "title": "Published"
+    }
+  },
+  "required": [
+    "title",
+    "content"
+  ]
+}

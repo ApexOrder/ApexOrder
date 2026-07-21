@@ -1,0 +1,67 @@
+{
+  "name": "Recruitment",
+  "type": "object",
+  "properties": {
+    "player_name": {
+      "type": "string",
+      "title": "In-Game Name"
+    },
+    "discord_tag": {
+      "type": "string",
+      "title": "Discord Tag"
+    },
+    "age": {
+      "type": "number",
+      "title": "Age"
+    },
+    "role_applying": {
+      "type": "string",
+      "enum": [
+        "Moderator",
+        "Admin",
+        "Developer",
+        "Event Host",
+        "Content Creator",
+        "Other"
+      ],
+      "title": "Role Applying For"
+    },
+    "games_played": {
+      "type": "string",
+      "title": "Games Played on ApexOrder"
+    },
+    "experience": {
+      "type": "string",
+      "title": "Relevant Experience"
+    },
+    "why_join": {
+      "type": "string",
+      "title": "Why do you want to join the team?"
+    },
+    "availability": {
+      "type": "string",
+      "title": "Weekly Availability (hours)"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "Pending",
+        "Shortlisted",
+        "Accepted",
+        "Declined"
+      ],
+      "default": "Pending",
+      "title": "Status"
+    },
+    "admin_notes": {
+      "type": "string",
+      "title": "Admin Notes (internal)"
+    }
+  },
+  "required": [
+    "player_name",
+    "discord_tag",
+    "role_applying",
+    "why_join"
+  ]
+}

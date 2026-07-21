@@ -1,0 +1,25 @@
+{
+  "name": "Server",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "title": "Server Name"
+    },
+    "image": {
+      "type": "string",
+      "title": "Image URL"
+    },
+    "join_link": {
+      "type": "string",
+      "title": "Joining Link"
+    },
+    "api_link": {
+      "type": "string",
+      "title": "API Link"
+    }
+  },
+  "required": [
+    "name"
+  ]
+}

@@ -1,0 +1,39 @@
+{
+  "name": "Event",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string",
+      "title": "Event Title"
+    },
+    "description": {
+      "type": "string",
+      "title": "Description"
+    },
+    "date": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Date & Time"
+    },
+    "game": {
+      "type": "string",
+      "title": "Game"
+    },
+    "server_id": {
+      "type": "string",
+      "title": "Linked Server ID"
+    },
+    "discord_link": {
+      "type": "string",
+      "title": "Discord Event Link"
+    },
+    "banner_image": {
+      "type": "string",
+      "title": "Banner Background Image URL"
+    }
+  },
+  "required": [
+    "title",
+    "date"
+  ]
+}
