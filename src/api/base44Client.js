@@ -201,6 +201,7 @@ const entityNames = [
   'NewsPost',
   'Changelog',
   'UserInventory',
+  'SiteSetting',
 ];
 
 const entities = Object.fromEntries(
