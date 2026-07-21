@@ -19,7 +19,7 @@ function dbServerToShape(s) {
     map: s.map || '',
     mods: s.mods ? s.mods.split(',').map(m => m.trim()).filter(Boolean) : [],
     ip: s.ip || s.join_link || '',
-    joinInstructions: s.join_instructions || s.join_link || '',
+    joinInstructions: s.join_instructions || '',
     ampEnabled: Boolean(s.amp_enabled),
   };
 }
