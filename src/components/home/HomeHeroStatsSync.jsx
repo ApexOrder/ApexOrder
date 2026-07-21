@@ -14,20 +14,25 @@ function findCard(title) {
   return heading ? { heading, card: heading.closest('.group') } : null;
 }
 
+function setText(element, value) {
+  if (element && value !== undefined && element.textContent !== String(value)) {
+    element.textContent = String(value);
+  }
+}
+
 function updateHeroCard(title, { value, description, nextTitle, href }) {
   const result = findCard(title);
   if (!result?.card) return;
   const { heading, card } = result;
 
-  if (nextTitle) heading.textContent = nextTitle;
+  if (nextTitle) setText(heading, nextTitle);
   const paragraph = card.querySelector('p');
-  if (paragraph && description) paragraph.textContent = description;
+  if (paragraph && description) setText(paragraph, description);
 
   const link = Array.from(card.querySelectorAll('a')).find((item) => item.querySelector('div'));
   if (!link) return;
-  if (href) link.setAttribute('href', href);
-  const cta = link.querySelector('div');
-  if (cta && value) cta.textContent = value;
+  if (href && link.getAttribute('href') !== href) link.setAttribute('href', href);
+  setText(link.querySelector('div'), value);
 }
 
 function updateCommunityStat(label, value) {
@@ -39,7 +44,7 @@ function updateCommunityStat(label, value) {
   const valueNode = Array.from(container.children).find((element) =>
     String(element.className || '').includes('text-3xl')
   );
-  if (valueNode) valueNode.textContent = String(value);
+  setText(valueNode, value);
 }
 
 function updateFooterServers(servers) {
@@ -49,17 +54,22 @@ function updateFooterServers(servers) {
   const list = heading?.parentElement?.querySelector('ul');
   if (!list) return;
 
-  list.replaceChildren(...servers.slice(0, 5).map((server) => {
+  const names = servers.slice(0, 5).map((server) => server.name || 'Unnamed Server');
+  const currentNames = Array.from(list.querySelectorAll('li')).map((item) => item.textContent?.trim() || '');
+  const desiredNames = names.length ? names : ['No servers listed'];
+  if (JSON.stringify(currentNames) === JSON.stringify(desiredNames)) return;
+
+  list.replaceChildren(...names.map((name) => {
     const item = document.createElement('li');
     const link = document.createElement('a');
     link.href = '/servers';
     link.className = 'text-muted-foreground hover:text-emerald-glow text-sm transition-colors';
-    link.textContent = server.name || 'Unnamed Server';
+    link.textContent = name;
     item.appendChild(link);
     return item;
   }));
 
-  if (!servers.length) {
+  if (!names.length) {
     const item = document.createElement('li');
     item.className = 'text-muted-foreground text-sm';
     item.textContent = 'No servers listed';
@@ -137,25 +147,34 @@ export default function HomeHeroStatsSync() {
         updateFooterServers(servers);
 
         document.querySelectorAll('span').forEach((element) => {
-          if (element.textContent?.trim() === 'Online Now') element.textContent = 'Join Community';
+          if (element.textContent?.trim() === 'Online Now') setText(element, 'Join Community');
         });
 
         if (settings?.hero_logo_url) {
-          document.querySelectorAll('img[alt="ApexOrder Emblem"]').forEach((image) => { image.src = settings.hero_logo_url; });
+          document.querySelectorAll('img[alt="ApexOrder Emblem"]').forEach((image) => {
+            if (image.src !== settings.hero_logo_url) image.src = settings.hero_logo_url;
+          });
         }
         if (settings?.hero_background_url) {
           document.querySelectorAll('img[alt=""]').forEach((image) => {
-            if (image.style?.objectFit === 'cover') image.src = settings.hero_background_url;
+            if (image.style?.objectFit === 'cover' && image.src !== settings.hero_background_url) image.src = settings.hero_background_url;
           });
         }
         if (settings?.community_image_url) {
-          document.querySelectorAll('img[alt="ApexOrder community gathering"]').forEach((image) => { image.src = settings.community_image_url; });
+          document.querySelectorAll('img[alt="ApexOrder community gathering"]').forEach((image) => {
+            if (image.src !== settings.community_image_url) image.src = settings.community_image_url;
+          });
         }
       };
 
+      const observe = () => observer?.observe(document.body, { childList: true, subtree: true });
       apply();
-      observer = new MutationObserver(apply);
-      observer.observe(document.body, { childList: true, subtree: true });
+      observer = new MutationObserver(() => {
+        observer.disconnect();
+        apply();
+        observe();
+      });
+      observe();
     };
 
     loadStats().catch((error) => {
