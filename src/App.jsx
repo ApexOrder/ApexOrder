@@ -6,6 +6,7 @@ import PageNotFound from './lib/PageNotFound';
 import { AuthProvider } from '@/lib/AuthContext';
 import { SiteSettingsProvider } from '@/lib/SiteSettingsContext';
 import ScrollToTop from './components/ScrollToTop';
+import HomeHeroStatsSync from './components/home/HomeHeroStatsSync';
 import Home from './pages/Home';
 import Servers from './pages/Servers';
 import Community from './pages/Community';
@@ -57,6 +58,7 @@ export default function App() {
         <SiteSettingsProvider>
           <Router>
             <ScrollToTop />
+            <HomeHeroStatsSync />
             <AppRoutes />
           </Router>
           <Toaster />
