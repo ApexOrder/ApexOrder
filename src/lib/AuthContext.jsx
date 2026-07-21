@@ -50,36 +50,15 @@ export function AuthProvider({ children }) {
     refreshUser().finally(() => setIsLoading(false));
   }, [refreshUser]);
 
-  const loginWithGoogle = useCallback(async (credential) => {
+  const logout = useCallback(() => {
+    setUser(null);
     setAuthError(null);
-
-    try {
-      const nextUser = await apiRequest('/api/auth/google', {
-        method: 'POST',
-        body: JSON.stringify({ credential }),
-      });
-      setUser(nextUser);
-      return nextUser;
-    } catch (error) {
-      setUser(null);
-      setAuthError(error);
-      throw error;
-    }
-  }, []);
-
-  const logout = useCallback(async () => {
-    try {
-      await apiRequest('/api/auth/logout', { method: 'POST' });
-    } finally {
-      setUser(null);
-      setAuthError(null);
-    }
+    window.location.href = '/cdn-cgi/access/logout';
   }, []);
 
   const checkAuth = useCallback(async () => Boolean(await refreshUser()), [refreshUser]);
   const navigateToLogin = useCallback(() => {
-    const returnUrl = `${window.location.pathname}${window.location.search}`;
-    window.location.href = `/login?returnUrl=${encodeURIComponent(returnUrl)}`;
+    window.location.href = '/admin';
   }, []);
 
   const value = useMemo(
@@ -94,7 +73,6 @@ export function AuthProvider({ children }) {
       error: authError,
       isAuthenticated: Boolean(user),
       authenticated: Boolean(user),
-      loginWithGoogle,
       logout,
       refreshUser,
       checkAuth,
@@ -104,7 +82,6 @@ export function AuthProvider({ children }) {
       user,
       isLoading,
       authError,
-      loginWithGoogle,
       logout,
       refreshUser,
       checkAuth,
