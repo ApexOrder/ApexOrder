@@ -119,7 +119,8 @@ export default function Servers() {
     try {
       const data = await base44.entities.Server.list('sort_order');
       const records = Array.isArray(data) ? data : [];
-      setServers(records.map(dbServerToShape));
+      const liveAmpServers = records.filter(server => server.amp_enabled === true);
+      setServers(liveAmpServers.map(dbServerToShape));
     } catch (error) {
       console.error('[Servers] Unable to load server records.', error);
       setServers([]);
