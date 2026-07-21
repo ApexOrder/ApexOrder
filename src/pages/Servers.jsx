@@ -12,7 +12,7 @@ function dbServerToShape(s) {
     id: s.id,
     name: s.name,
     tag: s.tag || 'SURVIVAL',
-    status: s.status || 'offline',
+    status: String(s.status || 'offline').toLowerCase(),
     description: s.description || '',
     image: s.image,
     players: { current: s.players_current || 0, max: s.players_max || 32 },
@@ -24,12 +24,59 @@ function dbServerToShape(s) {
   };
 }
 
+function publicStatusFromLive(live) {
+  if (!live || live.available === false) return 'unknown';
+
+  switch (live.stateId) {
+    case 20:
+      return 'online';
+    case 5:
+    case 7:
+    case 10:
+      return 'starting';
+    case 30:
+      return 'restarting';
+    case 40:
+    case 45:
+      return 'stopping';
+    case 50:
+      return 'sleeping';
+    case 70:
+    case 75:
+      return 'updating';
+    case 100:
+      return 'error';
+    case 200:
+    case 250:
+      return 'maintenance';
+    case 0:
+      return 'offline';
+    default:
+      break;
+  }
+
+  const state = String(live.state || '').toLowerCase();
+  if (live.online || ['ready', 'running', 'online', 'started'].some(value => state.includes(value))) return 'online';
+  if (state.includes('restart')) return 'restarting';
+  if (state.includes('start') || state.includes('configur')) return 'starting';
+  if (state.includes('stop')) return 'stopping';
+  if (state.includes('sleep')) return 'sleeping';
+  if (state.includes('install') || state.includes('updat')) return 'updating';
+  if (state.includes('fail') || state.includes('error')) return 'error';
+  if (state.includes('maint') || state.includes('suspend')) return 'maintenance';
+  if (state.includes('offline') || state.includes('stopped')) return 'offline';
+  return 'unknown';
+}
+
 function mergeLiveStatus(server, live) {
-  if (!live) return server;
+  if (!live) {
+    return server.ampEnabled ? { ...server, status: 'unknown' } : server;
+  }
+
   return {
     ...server,
     live,
-    status: live.available ? (live.online ? 'online' : 'offline') : server.status,
+    status: publicStatusFromLive(live),
     players: {
       current: live.playersCurrent ?? server.players?.current ?? 0,
       max: live.playersMax ?? server.players?.max ?? 0,
@@ -49,7 +96,7 @@ export default function Servers() {
   const loadLiveStats = async () => {
     setRefreshing(true);
     try {
-      const response = await fetch('/api/servers/live');
+      const response = await fetch('/api/servers/live', { cache: 'no-store' });
       if (!response.ok) throw new Error(`Live server status failed: ${response.status}`);
       const statuses = await response.json();
       const safeStatuses = Array.isArray(statuses) ? statuses : [];
@@ -58,6 +105,9 @@ export default function Servers() {
       setLastUpdated(new Date());
     } catch (error) {
       console.warn('[AMP] Unable to refresh live server statistics.', error);
+      setServers(current => current.map(server => (
+        server.ampEnabled ? { ...server, status: 'unknown', live: { ...(server.live || {}), available: false } } : server
+      )));
     } finally {
       setRefreshing(false);
     }
