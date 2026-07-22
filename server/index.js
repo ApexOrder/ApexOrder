@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import Database from 'better-sqlite3';
 import express from 'express';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
+import { clearGameQueryCache, queryServerStatus } from './gameQuery.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -237,7 +238,7 @@ app.disable('x-powered-by');
 app.set('trust proxy', 1);
 app.use(express.json({ limit: '2mb' }));
 
-app.get('/api/health', (_request, response) => response.json({ ok: true, database: databasePath, cloudflareAccess: accessConfigured, discordAuth: discordConfigured }));
+app.get('/api/health', (_request, response) => response.json({ ok: true, database: databasePath, cloudflareAccess: accessConfigured, discordAuth: discordConfigured, gameQuery: true }));
 app.get('/api/admin/me', requireAdmin, (request, response) => response.json(request.user));
 app.get('/api/auth/me', requireAdmin, (request, response) => response.json(request.user));
 app.get('/api/admin/audit', requireAdmin, (request, response) => {
@@ -250,6 +251,17 @@ app.get('/api/admin/settings', requireAdmin, (_request, response) => response.js
   discordClientId: discordClientId || null, discordRedirectUri: discordRedirectUri || null,
   sessionDays,
 }));
+
+app.get('/api/servers/live', async (request, response) => {
+  const force = request.query.refresh === '1';
+  const servers = listEntities.all('Server').map(parseRow);
+  response.json(await Promise.all(servers.map((server) => queryServerStatus(server, force))));
+});
+app.get('/api/servers/:id/live', async (request, response) => {
+  const server = parseRow(getEntity.get('Server', request.params.id));
+  if (!server) return response.status(404).json({ error: 'Server not found.' });
+  response.json(await queryServerStatus(server, request.query.refresh === '1'));
+});
 
 app.get('/api/member/me', (request, response) => response.json(readMember(request)));
 app.get('/api/auth/discord', (_request, response) => response.redirect('/api/member/login'));
@@ -332,6 +344,7 @@ app.put('/api/entities/:entityType/:id', requireAdmin, (request, response) => {
     const now = new Date().toISOString();
     const data = { ...existing, ...(request.body || {}), id: request.params.id, created_date: existing.created_date, updated_date: now };
     updateEntity.run({ entityType, id: request.params.id, data: JSON.stringify(data), updatedAt: now });
+    if (entityType === 'Server') clearGameQueryCache(request.params.id);
     audit(request, 'update', entityType, request.params.id, { changedFields: Object.keys(request.body || {}) });
     response.json(data);
   } catch (error) { response.status(400).json({ error: error.message }); }
@@ -341,6 +354,7 @@ app.delete('/api/entities/:entityType/:id', requireAdmin, (request, response) =>
     const entityType = normaliseEntityType(request.params.entityType);
     const result = deleteEntity.run(entityType, request.params.id);
     if (!result.changes) return response.status(404).json({ error: 'Item not found.' });
+    if (entityType === 'Server') clearGameQueryCache(request.params.id);
     audit(request, 'delete', entityType, request.params.id);
     response.status(204).end();
   } catch (error) { response.status(400).json({ error: error.message }); }
@@ -363,4 +377,5 @@ app.listen(port, '0.0.0.0', () => {
   console.log(`SQLite database: ${databasePath}`);
   console.log(`Cloudflare Access: ${accessConfigured ? 'configured' : 'not configured'}`);
   console.log(`Discord OAuth: ${discordConfigured ? 'configured' : 'not configured'}`);
+  console.log('Game server queries: GameDig protocol-valve');
 });
