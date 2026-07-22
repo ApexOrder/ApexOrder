@@ -5,7 +5,6 @@ import { fileURLToPath } from 'node:url';
 import Database from 'better-sqlite3';
 import express from 'express';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
-import { ampEnvironment, getAmpStatus, testAmpConnection } from './amp.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -26,8 +25,6 @@ const sessionSecret = String(process.env.SESSION_SECRET || '').trim();
 const discordConfigured = Boolean(discordClientId && discordClientSecret && discordRedirectUri && sessionSecret);
 const sessionDays = Math.max(1, Number(process.env.SESSION_DAYS || 30));
 const memberCookieName = 'apexorder_member';
-const liveStatusCache = new Map();
-const liveStatusTtlMs = Math.max(5000, Number(process.env.AMP_STATUS_CACHE_MS || 15000));
 
 fs.mkdirSync(dataDir, { recursive: true });
 const db = new Database(databasePath);
@@ -235,28 +232,12 @@ function audit(request, action, entityType = null, entityId = null, details = nu
   });
 }
 
-async function liveStatusForServer(server, force = false) {
-  if (!server?.amp_enabled || !server?.amp_url) return null;
-  const cached = liveStatusCache.get(server.id);
-  if (!force && cached && Date.now() - cached.time < liveStatusTtlMs) return cached.value;
-  try {
-    const status = await getAmpStatus(server.amp_url);
-    const value = { serverId: server.id, available: true, ...status };
-    liveStatusCache.set(server.id, { time: Date.now(), value });
-    return value;
-  } catch (error) {
-    const value = { serverId: server.id, available: false, online: false, state: 'unavailable', error: error.message, fetchedAt: new Date().toISOString() };
-    liveStatusCache.set(server.id, { time: Date.now(), value });
-    return value;
-  }
-}
-
 const app = express();
 app.disable('x-powered-by');
 app.set('trust proxy', 1);
 app.use(express.json({ limit: '2mb' }));
 
-app.get('/api/health', (_request, response) => response.json({ ok: true, database: databasePath, cloudflareAccess: accessConfigured, discordAuth: discordConfigured, amp: ampEnvironment().configured }));
+app.get('/api/health', (_request, response) => response.json({ ok: true, database: databasePath, cloudflareAccess: accessConfigured, discordAuth: discordConfigured }));
 app.get('/api/admin/me', requireAdmin, (request, response) => response.json(request.user));
 app.get('/api/auth/me', requireAdmin, (request, response) => response.json(request.user));
 app.get('/api/admin/audit', requireAdmin, (request, response) => {
@@ -267,28 +248,8 @@ app.get('/api/admin/audit', requireAdmin, (request, response) => {
 app.get('/api/admin/settings', requireAdmin, (_request, response) => response.json({
   appBaseUrl, databasePath, cloudflareAccess: accessConfigured, discordAuth: discordConfigured,
   discordClientId: discordClientId || null, discordRedirectUri: discordRedirectUri || null,
-  sessionDays, ampConfigured: ampEnvironment().configured, ampUsername: ampEnvironment().username || null,
+  sessionDays,
 }));
-app.post('/api/admin/amp/test', requireAdmin, async (request, response) => {
-  try {
-    const result = await testAmpConnection(request.body?.url);
-    audit(request, 'test', 'AMP', null, { url: String(request.body?.url || '') });
-    response.json(result);
-  } catch (error) {
-    response.status(502).json({ error: error.message });
-  }
-});
-
-app.get('/api/servers/live', async (_request, response) => {
-  const servers = listEntities.all('Server').map(parseRow).filter((server) => server.amp_enabled && server.amp_url);
-  response.json(await Promise.all(servers.map((server) => liveStatusForServer(server))));
-});
-app.get('/api/servers/:id/live', async (request, response) => {
-  const server = parseRow(getEntity.get('Server', request.params.id));
-  if (!server) return response.status(404).json({ error: 'Server not found.' });
-  if (!server.amp_enabled || !server.amp_url) return response.status(404).json({ error: 'AMP is not enabled for this server.' });
-  response.json(await liveStatusForServer(server, request.query.refresh === '1'));
-});
 
 app.get('/api/member/me', (request, response) => response.json(readMember(request)));
 app.get('/api/auth/discord', (_request, response) => response.redirect('/api/member/login'));
@@ -371,7 +332,6 @@ app.put('/api/entities/:entityType/:id', requireAdmin, (request, response) => {
     const now = new Date().toISOString();
     const data = { ...existing, ...(request.body || {}), id: request.params.id, created_date: existing.created_date, updated_date: now };
     updateEntity.run({ entityType, id: request.params.id, data: JSON.stringify(data), updatedAt: now });
-    if (entityType === 'Server') liveStatusCache.delete(request.params.id);
     audit(request, 'update', entityType, request.params.id, { changedFields: Object.keys(request.body || {}) });
     response.json(data);
   } catch (error) { response.status(400).json({ error: error.message }); }
@@ -381,7 +341,6 @@ app.delete('/api/entities/:entityType/:id', requireAdmin, (request, response) =>
     const entityType = normaliseEntityType(request.params.entityType);
     const result = deleteEntity.run(entityType, request.params.id);
     if (!result.changes) return response.status(404).json({ error: 'Item not found.' });
-    if (entityType === 'Server') liveStatusCache.delete(request.params.id);
     audit(request, 'delete', entityType, request.params.id);
     response.status(204).end();
   } catch (error) { response.status(400).json({ error: error.message }); }
@@ -404,5 +363,4 @@ app.listen(port, '0.0.0.0', () => {
   console.log(`SQLite database: ${databasePath}`);
   console.log(`Cloudflare Access: ${accessConfigured ? 'configured' : 'not configured'}`);
   console.log(`Discord OAuth: ${discordConfigured ? 'configured' : 'not configured'}`);
-  console.log(`AMP API: ${ampEnvironment().configured ? 'configured' : 'not configured'}`);
 });

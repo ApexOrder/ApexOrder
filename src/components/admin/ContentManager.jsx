@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Plus, RefreshCw, Save, Trash2, X, PlugZap } from 'lucide-react';
+import { Plus, RefreshCw, Save, Trash2, X } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 
 const SECTIONS = {
@@ -14,12 +14,11 @@ const SECTIONS = {
       ['image', 'Image URL'], ['description', 'Description', 'textarea'],
       ['ip', 'Connection Address'], ['join_link', 'Join Button URL'],
       ['join_instructions', 'Joining Instructions', 'textarea'],
+      ['battlemetrics_id', 'BattleMetrics Server ID'],
       ['live_map_url', 'Live Map URL'], ['discord_channel_url', 'Discord Channel URL'],
       ['map', 'Fallback Map'], ['version', 'Fallback Version'],
       ['players_max', 'Fallback Max Players', 'number'], ['mods', 'Mods / Plugins (comma separated)'],
       ['sort_order', 'Sort Order', 'number'], ['featured', 'Featured Server', 'boolean'],
-      ['show_performance', 'Show CPU / RAM / Uptime', 'boolean'],
-      ['amp_enabled', 'Use Live AMP Stats', 'boolean'], ['amp_url', 'AMP Instance URL'],
     ],
   },
   Project: {
@@ -120,7 +119,6 @@ export default function ContentManager() {
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({});
   const [loading, setLoading] = useState(false);
-  const [testingAmp, setTestingAmp] = useState(false);
   const [message, setMessage] = useState('');
   const section = SECTIONS[entity];
 
@@ -148,22 +146,6 @@ export default function ContentManager() {
       cancel(); await load();
     } catch (error) { setMessage(error.message); }
     finally { setLoading(false); }
-  };
-
-  const testAmp = async () => {
-    if (!form.amp_url) { setMessage('Enter the direct AMP instance URL first.'); return; }
-    setTestingAmp(true); setMessage('');
-    try {
-      const response = await fetch('/api/admin/amp/test', {
-        method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: form.amp_url }),
-      });
-      const result = await response.json().catch(() => null);
-      if (!response.ok) throw new Error(result?.error || `AMP test failed: ${response.status}`);
-      const status = result?.status || {};
-      setMessage(`AMP connection successful. ${status.name || 'Instance'} is ${status.state || 'connected'}${status.version ? ` · ${status.version}` : ''}.`);
-    } catch (error) { setMessage(error.message); }
-    finally { setTestingAmp(false); }
   };
 
   const remove = async (id) => {
@@ -211,12 +193,11 @@ export default function ContentManager() {
             </div>
             {entity === 'Server' && (
               <div className="mt-4 rounded-lg border border-white/10 bg-black/20 p-3 text-xs text-gray-400">
-                AMP credentials stay securely on the ApexOrder host. Add the direct URL for this specific AMP instance, then use <strong>TEST AMP</strong>. Servers without AMP enabled still appear using their saved fallback details.
+                Add the numeric BattleMetrics server ID to enable public live status and player counts. The Apex Bloodlines server defaults to <strong>39889715</strong> when this field is left empty.
               </div>
             )}
             <div className="mt-4 flex flex-wrap gap-2">
               <button onClick={save} disabled={loading} className="flex items-center gap-2 rounded-lg border border-emerald-400/40 bg-emerald-400/10 px-4 py-2 text-xs font-bold text-emerald-300"><Save size={15} /> SAVE</button>
-              {entity === 'Server' && <button onClick={testAmp} disabled={testingAmp} className="flex items-center gap-2 rounded-lg border border-cyan-400/30 bg-cyan-400/10 px-4 py-2 text-xs font-bold text-cyan-200"><PlugZap size={15} /> {testingAmp ? 'TESTING…' : 'TEST AMP'}</button>}
               <button onClick={cancel} className="flex items-center gap-2 rounded-lg border border-white/10 px-4 py-2 text-xs font-bold text-gray-400"><X size={15} /> CANCEL</button>
             </div>
           </div>
@@ -227,7 +208,7 @@ export default function ContentManager() {
             <div key={row.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-white/5 bg-white/[0.02] p-4">
               <div className="min-w-0">
                 <div className="truncate font-bold text-white">{row[section.title] || row.title || row.name || row.id}</div>
-                <div className="mt-1 text-xs text-gray-500">{entity === 'Server' && row.amp_enabled ? 'AMP LIVE · ' : ''}{row.status || row.category || row.game || row.email || row.discord_id || row.id}</div>
+                <div className="mt-1 text-xs text-gray-500">{entity === 'Server' && row.battlemetrics_id ? 'BATTLEMETRICS LIVE · ' : ''}{row.status || row.category || row.game || row.email || row.discord_id || row.id}</div>
               </div>
               <div className="flex flex-wrap gap-2">
                 {section.statusOnly && ['pending', 'approved', 'rejected'].map((status) => <button key={status} onClick={() => updateStatus(row, status)} className="rounded border border-white/10 px-2 py-1 text-xs text-gray-300">{status}</button>)}

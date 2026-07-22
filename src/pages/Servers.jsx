@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
 import { Server, Filter, RefreshCw } from 'lucide-react';
 import SectionHeading from '@/components/ui/SectionHeading';
 import ServerCard from '@/components/servers/ServerCard';
 import { base44 } from '@/api/base44Client';
 
 const filters = ['ALL', 'SURVIVAL', 'ROLEPLAY', 'SANDBOX', 'HARDCORE', 'FPS', 'STRATEGY'];
+const DEFAULT_BATTLEMETRICS_SERVER_ID = '39889715';
+const BATTLEMETRICS_API = 'https://api.battlemetrics.com/servers';
 
 function splitList(value) {
   if (Array.isArray(value)) return value;
@@ -18,7 +19,7 @@ function dbServerToShape(s) {
     name: s.name,
     game: s.game || '',
     tag: s.tag || 'SURVIVAL',
-    status: String(s.status || (s.amp_enabled ? 'unknown' : 'offline')).toLowerCase(),
+    status: String(s.status || 'offline').toLowerCase(),
     description: s.description || '',
     image: s.image,
     players: { current: s.players_current || 0, max: s.players_max || s.max_players || 32 },
@@ -31,31 +32,49 @@ function dbServerToShape(s) {
     liveMapUrl: s.live_map_url || '',
     discordChannelUrl: s.discord_channel_url || '',
     featured: Boolean(s.featured),
-    showPerformance: s.show_performance !== false,
-    ampEnabled: Boolean(s.amp_enabled),
+    showPerformance: false,
+    battleMetricsId: String(s.battlemetrics_id || DEFAULT_BATTLEMETRICS_SERVER_ID).trim(),
   };
+}
+
+function normaliseBattleMetricsStatus(payload) {
+  const data = payload?.data;
+  const attributes = data?.attributes;
+  if (!data || !attributes) throw new Error('BattleMetrics returned an invalid server response.');
+
+  const details = attributes.details || {};
+  const status = String(attributes.status || '').toLowerCase();
+
+  return {
+    source: 'battlemetrics',
+    battleMetricsId: String(data.id || ''),
+    available: true,
+    online: status === 'online',
+    state: status || 'unknown',
+    playersCurrent: Number.isFinite(Number(attributes.players)) ? Number(attributes.players) : null,
+    playersMax: Number.isFinite(Number(attributes.maxPlayers)) ? Number(attributes.maxPlayers) : null,
+    map: details.map || details.world || null,
+    version: details.version || details.gameVersion || null,
+    name: attributes.name || null,
+    ip: attributes.ip || null,
+    port: Number.isFinite(Number(attributes.port)) ? Number(attributes.port) : null,
+    rank: Number.isFinite(Number(attributes.rank)) ? Number(attributes.rank) : null,
+    fetchedAt: new Date().toISOString(),
+  };
+}
+
+async function fetchBattleMetricsStatus(serverId) {
+  const response = await fetch(`${BATTLEMETRICS_API}/${encodeURIComponent(serverId)}`, {
+    cache: 'no-store',
+    headers: { Accept: 'application/vnd.api+json' },
+  });
+
+  if (!response.ok) throw new Error(`BattleMetrics request failed: ${response.status}`);
+  return normaliseBattleMetricsStatus(await response.json());
 }
 
 function publicStatusFromLive(live) {
   if (!live || live.available === false) return 'unknown';
-
-  switch (live.stateId) {
-    case 20: return 'online';
-    case 5:
-    case 7:
-    case 10: return 'starting';
-    case 30: return 'restarting';
-    case 40:
-    case 45: return 'stopping';
-    case 50: return 'sleeping';
-    case 70:
-    case 75: return 'updating';
-    case 100: return 'error';
-    case 200:
-    case 250: return 'maintenance';
-    case 0: return 'offline';
-    default: break;
-  }
 
   const state = String(live.state || '').toLowerCase();
   if (live.online || ['ready', 'running', 'online', 'started'].some(value => state.includes(value))) return 'online';
@@ -66,12 +85,12 @@ function publicStatusFromLive(live) {
   if (state.includes('install') || state.includes('updat')) return 'updating';
   if (state.includes('fail') || state.includes('error')) return 'error';
   if (state.includes('maint') || state.includes('suspend')) return 'maintenance';
-  if (state.includes('offline') || state.includes('stopped')) return 'offline';
+  if (state.includes('offline') || state.includes('stopped') || state.includes('dead')) return 'offline';
   return 'unknown';
 }
 
 function mergeLiveStatus(server, live) {
-  if (!live) return server.ampEnabled ? { ...server, status: 'unknown' } : server;
+  if (!live) return server.battleMetricsId ? { ...server, status: 'unknown' } : server;
 
   return {
     ...server,
@@ -83,7 +102,7 @@ function mergeLiveStatus(server, live) {
     },
     map: live.map || server.map,
     version: live.version || server.version,
-    ampName: live.name || '',
+    battleMetricsName: live.name || '',
   };
 }
 
@@ -95,52 +114,55 @@ export default function Servers() {
   const [refreshing, setRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(null);
 
-  const loadLiveStats = async () => {
-    setRefreshing(true);
-    try {
-      const response = await fetch('/api/servers/live', { cache: 'no-store' });
-      if (!response.ok) throw new Error(`Live server status failed: ${response.status}`);
-      const statuses = await response.json();
-      const safeStatuses = Array.isArray(statuses) ? statuses : [];
-      const byId = new Map(safeStatuses.map(status => [status.serverId, status]));
-      setServers(current => current.map(server => mergeLiveStatus(server, byId.get(server.id))));
-      setLastUpdated(new Date());
-    } catch (error) {
-      console.warn('[AMP] Unable to refresh live server statistics.', error);
-      setServers(current => current.map(server => (
-        server.ampEnabled ? { ...server, status: 'unknown', live: { ...(server.live || {}), available: false } } : server
-      )));
-    } finally {
-      setRefreshing(false);
-    }
-  };
-
-  const loadServers = async () => {
-    setLoading(true);
+  const loadLiveStats = async ({ initial = false } = {}) => {
+    if (initial) setLoading(true);
+    else setRefreshing(true);
     setLoadError('');
+
     try {
       const data = await base44.entities.Server.list('sort_order');
       const records = Array.isArray(data) ? data : [];
-      setServers(records.map(dbServerToShape));
+      const shaped = records.map(dbServerToShape);
+      const uniqueIds = [...new Set(shaped.map(server => server.battleMetricsId).filter(Boolean))];
+      const results = await Promise.allSettled(uniqueIds.map(async id => [id, await fetchBattleMetricsStatus(id)]));
+      const byBattleMetricsId = new Map();
+
+      for (const result of results) {
+        if (result.status === 'fulfilled') byBattleMetricsId.set(result.value[0], result.value[1]);
+        else console.warn('[BattleMetrics] Unable to refresh a server.', result.reason);
+      }
+
+      setServers(shaped.map(server => {
+        const live = byBattleMetricsId.get(server.battleMetricsId);
+        if (live) return mergeLiveStatus(server, live);
+        return server.battleMetricsId
+          ? { ...server, status: 'unknown', live: { source: 'battlemetrics', available: false } }
+          : server;
+      }));
+      setLastUpdated(new Date());
     } catch (error) {
-      console.error('[Servers] Unable to load server records.', error);
-      setServers([]);
-      setLoadError('Unable to load the server list right now.');
+      console.warn('[BattleMetrics] Unable to refresh live server statistics.', error);
+      if (initial) setServers([]);
+      else setServers(current => current.map(server => (
+        server.battleMetricsId ? { ...server, status: 'unknown', live: { ...(server.live || {}), source: 'battlemetrics', available: false } } : server
+      )));
+      setLoadError(initial ? 'Unable to load the server list right now.' : 'Live server data could not be refreshed.');
     } finally {
-      setLoading(false);
+      if (initial) setLoading(false);
+      else setRefreshing(false);
     }
   };
 
   useEffect(() => {
     let cancelled = false;
     const initialise = async () => {
-      await loadServers();
-      if (!cancelled) await loadLiveStats();
+      if (!cancelled) await loadLiveStats({ initial: true });
     };
+
     initialise();
     const timer = window.setInterval(() => {
-      if (!document.hidden) loadLiveStats();
-    }, 15000);
+      if (!document.hidden && !cancelled) loadLiveStats();
+    }, 30000);
     return () => {
       cancelled = true;
       window.clearInterval(timer);
@@ -156,7 +178,7 @@ export default function Servers() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-12 relative z-10">
         <SectionHeading title="Game Servers" subtitle="TACTICAL GRID" />
         <p className="text-center text-muted-foreground max-w-2xl mx-auto -mt-8 mb-10">
-          Live status, players and performance are pulled securely from AMP. Every server remains managed from the ApexOrder admin panel.
+          Public server status and player counts are supplied by BattleMetrics. Server management remains securely handled through AMP.
         </p>
 
         <div className="flex flex-wrap items-center justify-center gap-2 mb-8">
@@ -173,9 +195,9 @@ export default function Servers() {
           <div className="w-px h-4 bg-border" />
           <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-emerald-glow animate-pulse" /><span className="text-muted-foreground">{activePlayers} PLAYERS ACTIVE</span></div>
           <div className="w-px h-4 bg-border" />
-          <button onClick={loadLiveStats} disabled={refreshing || loading} className="flex items-center gap-2 text-muted-foreground hover:text-emerald-glow transition-colors disabled:opacity-50">
+          <button onClick={() => loadLiveStats()} disabled={refreshing || loading} className="flex items-center gap-2 text-muted-foreground hover:text-emerald-glow transition-colors disabled:opacity-50">
             <RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} />
-            {refreshing ? 'REFRESHING' : lastUpdated ? `LIVE · ${lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'REFRESH LIVE'}
+            {refreshing ? 'REFRESHING' : lastUpdated ? `BATTLEMETRICS · ${lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'REFRESH LIVE'}
           </button>
         </div>
       </div>
@@ -183,10 +205,11 @@ export default function Servers() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {loading ? (
           <div className="text-center py-16"><RefreshCw size={22} className="mx-auto mb-4 animate-spin text-emerald-glow" /><p className="text-muted-foreground font-mono">Loading servers…</p></div>
-        ) : loadError ? (
-          <div className="text-center py-16"><p className="text-red-300 font-mono">{loadError}</p><button onClick={loadServers} className="mt-4 text-xs font-mono text-emerald-glow hover:underline">TRY AGAIN</button></div>
+        ) : loadError && servers.length === 0 ? (
+          <div className="text-center py-16"><p className="text-red-300 font-mono">{loadError}</p><button onClick={() => loadLiveStats({ initial: true })} className="mt-4 text-xs font-mono text-emerald-glow hover:underline">TRY AGAIN</button></div>
         ) : (
           <>
+            {loadError && <div className="mb-6 rounded-lg border border-amber-400/20 bg-amber-400/5 p-3 text-center text-xs font-mono text-amber-200">{loadError}</div>}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filtered.map((server, index) => <ServerCard key={server.id} server={server} index={index} />)}
             </div>
