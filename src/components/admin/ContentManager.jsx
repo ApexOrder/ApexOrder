@@ -8,10 +8,18 @@ const SECTIONS = {
     sort: '-sort_order',
     title: 'name',
     fields: [
-      ['name', 'Server Name'], ['image', 'Image URL'], ['join_link', 'Joining Link'],
-      ['api_link', 'API Link'], ['sort_order', 'Sort Order', 'number'],
-      ['amp_enabled', 'Use Live AMP Stats', 'boolean'],
-      ['amp_url', 'AMP Instance URL'],
+      ['name', 'Server Name'], ['game', 'Game'],
+      ['tag', 'Category', 'select', ['SURVIVAL', 'ROLEPLAY', 'SANDBOX', 'HARDCORE', 'FPS', 'STRATEGY']],
+      ['status', 'Fallback Status', 'select', ['offline', 'online', 'maintenance']],
+      ['image', 'Image URL'], ['description', 'Description', 'textarea'],
+      ['ip', 'Connection Address'], ['join_link', 'Join Button URL'],
+      ['join_instructions', 'Joining Instructions', 'textarea'],
+      ['live_map_url', 'Live Map URL'], ['discord_channel_url', 'Discord Channel URL'],
+      ['map', 'Fallback Map'], ['version', 'Fallback Version'],
+      ['players_max', 'Fallback Max Players', 'number'], ['mods', 'Mods / Plugins (comma separated)'],
+      ['sort_order', 'Sort Order', 'number'], ['featured', 'Featured Server', 'boolean'],
+      ['show_performance', 'Show CPU / RAM / Uptime', 'boolean'],
+      ['amp_enabled', 'Use Live AMP Stats', 'boolean'], ['amp_url', 'AMP Instance URL'],
     ],
   },
   Project: {
@@ -152,8 +160,8 @@ export default function ContentManager() {
       });
       const result = await response.json().catch(() => null);
       if (!response.ok) throw new Error(result?.error || `AMP test failed: ${response.status}`);
-      const state = result?.status?.state || 'connected';
-      setMessage(`AMP connection successful. Instance state: ${state}.`);
+      const status = result?.status || {};
+      setMessage(`AMP connection successful. ${status.name || 'Instance'} is ${status.state || 'connected'}${status.version ? ` · ${status.version}` : ''}.`);
     } catch (error) { setMessage(error.message); }
     finally { setTestingAmp(false); }
   };
@@ -203,7 +211,7 @@ export default function ContentManager() {
             </div>
             {entity === 'Server' && (
               <div className="mt-4 rounded-lg border border-white/10 bg-black/20 p-3 text-xs text-gray-400">
-                AMP credentials stay on the ApexOrder server in <code>AMP_USERNAME</code>, <code>AMP_PASSWORD</code> or <code>AMP_TOKEN</code>. Enter the direct URL for this AMP instance, for example <code>https://panel.example.com:8080</code>.
+                AMP credentials stay securely on the ApexOrder host. Add the direct URL for this specific AMP instance, then use <strong>TEST AMP</strong>. Servers without AMP enabled still appear using their saved fallback details.
               </div>
             )}
             <div className="mt-4 flex flex-wrap gap-2">
