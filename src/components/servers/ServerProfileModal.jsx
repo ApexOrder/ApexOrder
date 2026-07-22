@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Users, Map, Cpu, Copy, Check, MemoryStick, Clock3, Gamepad2, ExternalLink, Radio, Gauge } from 'lucide-react';
+import { X, Users, Map, Cpu, Copy, Check, MemoryStick, Clock3, Gamepad2, ExternalLink, Radio, Gauge, UserRound, Timer, Trophy, Wifi } from 'lucide-react';
 import CapacityBar from '@/components/ui/CapacityBar';
 import StatusBadge from '@/components/ui/StatusBadge';
 
@@ -21,6 +21,17 @@ function formatUptime(seconds) {
   if (days) return `${days}d ${hours}h`;
   if (hours) return `${hours}h ${minutes}m`;
   return `${minutes}m`;
+}
+
+function formatSessionTime(seconds) {
+  const value = Number(seconds);
+  if (!Number.isFinite(value) || value < 0) return null;
+  const hours = Math.floor(value / 3600);
+  const minutes = Math.floor((value % 3600) / 60);
+  const secs = Math.floor(value % 60);
+  if (hours) return `${hours}h ${minutes}m`;
+  if (minutes) return `${minutes}m ${secs}s`;
+  return `${secs}s`;
 }
 
 function Metric({ icon: Icon, label, value, accent = '#10FF8B' }) {
@@ -48,6 +59,7 @@ export default function ServerProfileModal({ server, onClose }) {
 
   const mods = Array.isArray(server.mods) ? server.mods : String(server.mods || '').split(',').map(m => m.trim()).filter(Boolean);
   const fetchedAt = live?.fetchedAt ? new Date(live.fetchedAt) : null;
+  const players = Array.isArray(live?.players) ? live.players : [];
 
   return (
     <AnimatePresence>
@@ -67,7 +79,7 @@ export default function ServerProfileModal({ server, onClose }) {
             <div className="absolute inset-0" style={{ background: 'linear-gradient(to top, rgba(6,14,6,1) 0%, rgba(6,14,6,0.25) 65%, transparent 100%)' }} />
             <div className="absolute top-4 left-4 flex gap-2">
               <span className="px-2 py-1 text-xs font-mono font-bold rounded" style={{ background: 'rgba(5,10,5,0.8)', border: '1px solid rgba(212,175,55,0.4)', color: '#D4AF37' }}>{server.tag}</span>
-              {live?.available && <span className="flex items-center gap-1 px-2 py-1 text-xs font-mono rounded" style={{ background: 'rgba(5,10,5,0.8)', border: '1px solid rgba(16,255,139,0.3)', color: '#10FF8B' }}><Radio size={11} className="animate-pulse" /> AMP LIVE</span>}
+              {live?.available && <span className="flex items-center gap-1 px-2 py-1 text-xs font-mono rounded" style={{ background: 'rgba(5,10,5,0.8)', border: '1px solid rgba(16,255,139,0.3)', color: '#10FF8B' }}><Radio size={11} className="animate-pulse" /> LIVE QUERY</span>}
             </div>
             <div className="absolute top-4 right-12"><StatusBadge status={server.status} /></div>
             <button onClick={onClose} className="absolute top-3 right-3 w-8 h-8 rounded flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.7)' }}><X size={15} /></button>
@@ -88,12 +100,47 @@ export default function ServerProfileModal({ server, onClose }) {
               <Metric icon={Users} label="PLAYERS" value={`${server.players?.current ?? 0}/${server.players?.max ?? 32}`} />
               <Metric icon={Map} label="MAP" value={server.map || 'Unknown'} accent="#D4AF37" />
               <Metric icon={Gauge} label="STATE" value={live?.state || server.status} accent="#7DD3FC" />
+              {live?.ping != null && <Metric icon={Wifi} label="PING" value={`${Math.round(live.ping)} ms`} accent="#7DD3FC" />}
               {server.showPerformance && <Metric icon={Cpu} label="CPU" value={live?.cpuPercent == null ? '—' : `${Math.round(live.cpuPercent)}%`} />}
               {server.showPerformance && <Metric icon={MemoryStick} label="RAM" value={formatBytes(live?.memoryBytes)} accent="#D4AF37" />}
               {server.showPerformance && <Metric icon={Clock3} label="UPTIME" value={formatUptime(live?.uptimeSeconds)} accent="#7DD3FC" />}
             </div>
 
             <CapacityBar current={server.players?.current ?? 0} max={server.players?.max ?? 32} label="SERVER CAPACITY" />
+
+            {live?.available && (
+              <div className="mt-5">
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-1.5"><Users size={13} className="text-emerald-glow" /><span className="text-xs font-mono tracking-wider text-emerald-glow">ONLINE PLAYERS</span></div>
+                  <span className="text-[10px] font-mono text-muted-foreground">{server.players?.current ?? players.length} CONNECTED</span>
+                </div>
+
+                {players.length > 0 ? (
+                  <div className="space-y-2">
+                    {players.map((player, playerIndex) => {
+                      const sessionTime = formatSessionTime(player.time);
+                      return (
+                        <div key={`${player.name}-${playerIndex}`} className="flex flex-wrap items-center justify-between gap-3 rounded-lg px-3 py-2.5" style={{ background: 'rgba(16,255,139,0.035)', border: '1px solid rgba(16,255,139,0.12)' }}>
+                          <div className="flex min-w-0 items-center gap-2.5">
+                            <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-glow shadow-[0_0_8px_rgba(16,255,139,0.8)]" />
+                            <UserRound size={15} className="shrink-0 text-emerald-glow" />
+                            <span className="truncate text-sm font-semibold text-foreground">{player.name}</span>
+                          </div>
+                          <div className="flex items-center gap-3 text-[10px] font-mono text-muted-foreground">
+                            {sessionTime && <span className="flex items-center gap-1"><Timer size={11} /> {sessionTime}</span>}
+                            {player.score != null && <span className="flex items-center gap-1"><Trophy size={11} /> {player.score}</span>}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-white/8 bg-white/[0.02] px-3 py-4 text-center text-xs font-mono text-muted-foreground">
+                    No players are currently online.
+                  </div>
+                )}
+              </div>
+            )}
 
             {mods.length > 0 && (
               <div className="mt-5">
@@ -116,7 +163,7 @@ export default function ServerProfileModal({ server, onClose }) {
               {server.discordChannelUrl && <a href={server.discordChannelUrl} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-2 rounded border border-sky-400/30 bg-sky-400/5 px-4 py-3 text-xs font-bold tracking-wider text-sky-300">DISCORD <ExternalLink size={13} /></a>}
             </div>
 
-            {live && !live.available && <div className="mt-5 rounded-lg border border-amber-400/20 bg-amber-400/5 px-3 py-2 text-[11px] font-mono text-amber-200">AMP could not be reached. Saved server details are still available.</div>}
+            {live && !live.available && <div className="mt-5 rounded-lg border border-amber-400/20 bg-amber-400/5 px-3 py-2 text-[11px] font-mono text-amber-200">Live server query is temporarily unavailable. Saved server details are still available.</div>}
           </div>
         </motion.div>
       </motion.div>
