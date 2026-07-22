@@ -7,20 +7,31 @@ import { base44 } from '@/api/base44Client';
 
 const filters = ['ALL', 'SURVIVAL', 'ROLEPLAY', 'SANDBOX', 'HARDCORE', 'FPS', 'STRATEGY'];
 
+function splitList(value) {
+  if (Array.isArray(value)) return value;
+  return String(value || '').split(',').map(item => item.trim()).filter(Boolean);
+}
+
 function dbServerToShape(s) {
   return {
     id: s.id,
     name: s.name,
+    game: s.game || '',
     tag: s.tag || 'SURVIVAL',
-    status: String(s.status || 'offline').toLowerCase(),
+    status: String(s.status || (s.amp_enabled ? 'unknown' : 'offline')).toLowerCase(),
     description: s.description || '',
     image: s.image,
-    players: { current: s.players_current || 0, max: s.players_max || 32 },
+    players: { current: s.players_current || 0, max: s.players_max || s.max_players || 32 },
     map: s.map || '',
-    mods: s.mods ? s.mods.split(',').map(m => m.trim()).filter(Boolean) : [],
+    version: s.version || '',
+    mods: splitList(s.mods),
     ip: s.ip || '',
     joinUrl: s.join_link || '',
     joinInstructions: s.join_instructions || '',
+    liveMapUrl: s.live_map_url || '',
+    discordChannelUrl: s.discord_channel_url || '',
+    featured: Boolean(s.featured),
+    showPerformance: s.show_performance !== false,
     ampEnabled: Boolean(s.amp_enabled),
   };
 }
@@ -29,31 +40,21 @@ function publicStatusFromLive(live) {
   if (!live || live.available === false) return 'unknown';
 
   switch (live.stateId) {
-    case 20:
-      return 'online';
+    case 20: return 'online';
     case 5:
     case 7:
-    case 10:
-      return 'starting';
-    case 30:
-      return 'restarting';
+    case 10: return 'starting';
+    case 30: return 'restarting';
     case 40:
-    case 45:
-      return 'stopping';
-    case 50:
-      return 'sleeping';
+    case 45: return 'stopping';
+    case 50: return 'sleeping';
     case 70:
-    case 75:
-      return 'updating';
-    case 100:
-      return 'error';
+    case 75: return 'updating';
+    case 100: return 'error';
     case 200:
-    case 250:
-      return 'maintenance';
-    case 0:
-      return 'offline';
-    default:
-      break;
+    case 250: return 'maintenance';
+    case 0: return 'offline';
+    default: break;
   }
 
   const state = String(live.state || '').toLowerCase();
@@ -70,9 +71,7 @@ function publicStatusFromLive(live) {
 }
 
 function mergeLiveStatus(server, live) {
-  if (!live) {
-    return server.ampEnabled ? { ...server, status: 'unknown' } : server;
-  }
+  if (!live) return server.ampEnabled ? { ...server, status: 'unknown' } : server;
 
   return {
     ...server,
@@ -83,6 +82,8 @@ function mergeLiveStatus(server, live) {
       max: live.playersMax ?? server.players?.max ?? 0,
     },
     map: live.map || server.map,
+    version: live.version || server.version,
+    ampName: live.name || '',
   };
 }
 
@@ -120,8 +121,7 @@ export default function Servers() {
     try {
       const data = await base44.entities.Server.list('sort_order');
       const records = Array.isArray(data) ? data : [];
-      const liveAmpServers = records.filter(server => server.amp_enabled === true);
-      setServers(liveAmpServers.map(dbServerToShape));
+      setServers(records.map(dbServerToShape));
     } catch (error) {
       console.error('[Servers] Unable to load server records.', error);
       setServers([]);
@@ -133,65 +133,45 @@ export default function Servers() {
 
   useEffect(() => {
     let cancelled = false;
-
     const initialise = async () => {
       await loadServers();
       if (!cancelled) await loadLiveStats();
     };
-
     initialise();
-
     const timer = window.setInterval(() => {
       if (!document.hidden) loadLiveStats();
-    }, 10000);
-
+    }, 15000);
     return () => {
       cancelled = true;
       window.clearInterval(timer);
     };
   }, []);
 
-  const filtered = activeFilter === 'ALL'
-    ? servers
-    : servers.filter(s => s.tag === activeFilter);
+  const filtered = activeFilter === 'ALL' ? servers : servers.filter(s => s.tag === activeFilter);
+  const onlineCount = servers.filter(s => s.status === 'online').length;
+  const activePlayers = servers.reduce((sum, s) => sum + (s.players?.current ?? 0), 0);
 
   return (
     <div className="pt-24 pb-20">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-12 relative z-10">
         <SectionHeading title="Game Servers" subtitle="TACTICAL GRID" />
         <p className="text-center text-muted-foreground max-w-2xl mx-auto -mt-8 mb-10">
-          Our dedicated servers run 24/7 with active moderation, custom configurations, and regular updates. Pick your battlefield.
+          Live status, players and performance are pulled securely from AMP. Every server remains managed from the ApexOrder admin panel.
         </p>
 
         <div className="flex flex-wrap items-center justify-center gap-2 mb-8">
           <Filter size={14} className="text-muted-foreground mr-2" />
           {filters.map(filter => (
-            <button
-              key={filter}
-              onClick={() => setActiveFilter(filter)}
-              className={`px-4 py-1.5 text-xs font-mono tracking-wider rounded border transition-all duration-300 ${
-                activeFilter === filter
-                  ? 'bg-emerald-glow/10 border-emerald-glow/40 text-emerald-glow'
-                  : 'border-border text-muted-foreground hover:text-foreground hover:border-foreground/30'
-              }`}
-            >
+            <button key={filter} onClick={() => setActiveFilter(filter)} className={`px-4 py-1.5 text-xs font-mono tracking-wider rounded border transition-all duration-300 ${activeFilter === filter ? 'bg-emerald-glow/10 border-emerald-glow/40 text-emerald-glow' : 'border-border text-muted-foreground hover:text-foreground hover:border-foreground/30'}`}>
               {filter}
             </button>
           ))}
         </div>
 
         <div className="flex flex-wrap items-center justify-center gap-6 mb-12 text-xs font-mono">
-          <div className="flex items-center gap-2">
-            <Server size={14} className="text-emerald-glow" />
-            <span className="text-muted-foreground">{servers.filter(s => s.status === 'online').length} SERVERS ONLINE</span>
-          </div>
+          <div className="flex items-center gap-2"><Server size={14} className="text-emerald-glow" /><span className="text-muted-foreground">{onlineCount} OF {servers.length} ONLINE</span></div>
           <div className="w-px h-4 bg-border" />
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-glow animate-pulse" />
-            <span className="text-muted-foreground">
-              {servers.reduce((sum, s) => sum + (s.players?.current ?? 0), 0)} PLAYERS ACTIVE
-            </span>
-          </div>
+          <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-emerald-glow animate-pulse" /><span className="text-muted-foreground">{activePlayers} PLAYERS ACTIVE</span></div>
           <div className="w-px h-4 bg-border" />
           <button onClick={loadLiveStats} disabled={refreshing || loading} className="flex items-center gap-2 text-muted-foreground hover:text-emerald-glow transition-colors disabled:opacity-50">
             <RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} />
@@ -202,30 +182,15 @@ export default function Servers() {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {loading ? (
-          <div className="text-center py-16">
-            <RefreshCw size={22} className="mx-auto mb-4 animate-spin text-emerald-glow" />
-            <p className="text-muted-foreground font-mono">Loading servers…</p>
-          </div>
+          <div className="text-center py-16"><RefreshCw size={22} className="mx-auto mb-4 animate-spin text-emerald-glow" /><p className="text-muted-foreground font-mono">Loading servers…</p></div>
         ) : loadError ? (
-          <div className="text-center py-16">
-            <p className="text-red-300 font-mono">{loadError}</p>
-            <button onClick={loadServers} className="mt-4 text-xs font-mono text-emerald-glow hover:underline">TRY AGAIN</button>
-          </div>
+          <div className="text-center py-16"><p className="text-red-300 font-mono">{loadError}</p><button onClick={loadServers} className="mt-4 text-xs font-mono text-emerald-glow hover:underline">TRY AGAIN</button></div>
         ) : (
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filtered.map((server, index) => (
-                <ServerCard key={server.id} server={server} index={index} />
-              ))}
+              {filtered.map((server, index) => <ServerCard key={server.id} server={server} index={index} />)}
             </div>
-
-            {filtered.length === 0 && (
-              <div className="text-center py-16">
-                <p className="text-muted-foreground font-mono">
-                  {servers.length === 0 ? 'No servers have been added yet.' : 'No servers match this filter.'}
-                </p>
-              </div>
-            )}
+            {filtered.length === 0 && <div className="text-center py-16"><p className="text-muted-foreground font-mono">{servers.length === 0 ? 'No servers have been added yet.' : 'No servers match this filter.'}</p></div>}
           </>
         )}
       </div>
