@@ -4,6 +4,21 @@ const cache = new Map();
 const cacheTtlMs = Math.max(5000, Number(process.env.GAME_QUERY_CACHE_MS || 15000));
 const queryTimeoutMs = Math.max(1000, Number(process.env.GAME_QUERY_TIMEOUT_MS || 5000));
 
+const supportedQueryTypes = new Set([
+  'protocol-valve',
+  'dayz',
+  'minecraft',
+  'minecraftbedrock',
+  'rust',
+  'valheim',
+  'arkse',
+  'conanexiles',
+  'terraria',
+  'cs2',
+  'teamspeak3',
+  'mumble',
+]);
+
 function numberOrNull(value) {
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
@@ -20,8 +35,14 @@ function normalisePlayers(players) {
     .filter((player) => player.name);
 }
 
+function queryTypeFor(server) {
+  const requested = String(server?.query_type || 'protocol-valve').trim().toLowerCase();
+  return supportedQueryTypes.has(requested) ? requested : 'protocol-valve';
+}
+
 function cacheKey(server) {
-  return `${server.id}:${server.query_host || '127.0.0.1'}:${Number(server.query_port || 26903)}`;
+  const type = queryTypeFor(server);
+  return `${server.id}:${type}:${server.query_host || '127.0.0.1'}:${Number(server.query_port || 26903)}`;
 }
 
 export function clearGameQueryCache(serverId) {
@@ -31,6 +52,7 @@ export function clearGameQueryCache(serverId) {
 }
 
 export async function queryServerStatus(server, force = false) {
+  const type = queryTypeFor(server);
   const host = String(server?.query_host || '127.0.0.1').trim();
   const port = Number(server?.query_port || 26903);
   if (!host) throw new Error('Query host is required.');
@@ -42,7 +64,7 @@ export async function queryServerStatus(server, force = false) {
 
   try {
     const result = await GameDig.query({
-      type: 'protocol-valve',
+      type,
       host,
       port,
       socketTimeout: queryTimeoutMs,
@@ -54,6 +76,7 @@ export async function queryServerStatus(server, force = false) {
     const value = {
       serverId: server.id,
       source: 'gamedig',
+      queryType: type,
       available: true,
       online: true,
       state: 'online',
@@ -76,6 +99,7 @@ export async function queryServerStatus(server, force = false) {
     const value = {
       serverId: server.id,
       source: 'gamedig',
+      queryType: type,
       available: false,
       online: false,
       state: 'offline',
