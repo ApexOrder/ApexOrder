@@ -2,6 +2,21 @@ import { useEffect, useMemo, useState } from 'react';
 import { Plus, RefreshCw, Save, Trash2, X } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 
+const QUERY_TYPES = [
+  'protocol-valve',
+  'dayz',
+  'minecraft',
+  'minecraftbedrock',
+  'rust',
+  'valheim',
+  'arkse',
+  'conanexiles',
+  'terraria',
+  'cs2',
+  'teamspeak3',
+  'mumble',
+];
+
 const SECTIONS = {
   Server: {
     label: 'Servers',
@@ -14,6 +29,7 @@ const SECTIONS = {
       ['image', 'Image URL'], ['description', 'Description', 'textarea'],
       ['ip', 'Connection Address'], ['join_link', 'Join Button URL'],
       ['join_instructions', 'Joining Instructions', 'textarea'],
+      ['query_type', 'Query Protocol / Game Type', 'select', QUERY_TYPES],
       ['query_host', 'Query Host'], ['query_port', 'Query Port', 'number'],
       ['live_map_url', 'Live Map URL'], ['discord_channel_url', 'Discord Channel URL'],
       ['map', 'Fallback Map'], ['version', 'Fallback Version'],
@@ -135,6 +151,7 @@ export default function ContentManager() {
     setEditing('new');
     const next = emptyFor(section);
     if (entity === 'Server') {
+      next.query_type = 'protocol-valve';
       next.query_host = '127.0.0.1';
       next.query_port = 26903;
     }
@@ -201,7 +218,7 @@ export default function ContentManager() {
             </div>
             {entity === 'Server' && (
               <div className="mt-4 rounded-lg border border-white/10 bg-black/20 p-3 text-xs text-gray-400">
-                Live status is queried directly using the Valve protocol. For the local 7 Days to Die server use <strong>127.0.0.1</strong> and query port <strong>26903</strong>.
+                Choose the matching GameDig type. Use <strong>protocol-valve</strong> for 7 Days to Die and most Steam/Source queries, or <strong>dayz</strong> for DayZ. For servers on another VM, use that VM's reachable LAN/NAT address rather than 127.0.0.1.
               </div>
             )}
             <div className="mt-4 flex flex-wrap gap-2">
@@ -216,10 +233,10 @@ export default function ContentManager() {
             <div key={row.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-white/5 bg-white/[0.02] p-4">
               <div className="min-w-0">
                 <div className="truncate font-bold text-white">{row[section.title] || row.title || row.name || row.id}</div>
-                <div className="mt-1 text-xs text-gray-500">{entity === 'Server' && row.query_port ? `LIVE QUERY ${row.query_host || '127.0.0.1'}:${row.query_port} · ` : ''}{row.status || row.category || row.game || row.email || row.discord_id || row.id}</div>
+                <div className="mt-1 text-xs text-gray-500">{entity === 'Server' && row.query_port ? `${row.query_type || 'protocol-valve'} · ${row.query_host || '127.0.0.1'}:${row.query_port} · ` : ''}{row.status || row.category || row.game || row.email || row.discord_id || row.id}</div>
               </div>
               <div className="flex flex-wrap gap-2">
-                {section.statusOnly && ['pending', 'approved', 'rejected'].map((status) => <button key={status} onClick={() => updateStatus(row, status)} className="rounded border border-white/10 px-2 py-1 text-xs text-gray-300">{status}</button>)}
+                {section.statusOnly && ['pending', 'approved', 'rejected'].map((status) => <button key={status} onClick={() => updateStatus(row.id, status)} className="rounded border border-white/10 px-2 py-1 text-xs text-gray-300">{status}</button>)}
                 {!section.readOnly && !section.statusOnly && <button onClick={() => startEdit(row)} className="rounded border border-emerald-400/30 px-3 py-1.5 text-xs font-bold text-emerald-300">EDIT</button>}
                 {!section.readOnly && <button onClick={() => remove(row.id)} className="rounded border border-red-400/25 p-2 text-red-300"><Trash2 size={14} /></button>}
               </div>
