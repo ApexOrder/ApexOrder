@@ -1,28 +1,9 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Users, Map, ChevronRight, ExternalLink, Cpu, MemoryStick, Clock3, Radio } from 'lucide-react';
+import { Users, Map, ChevronRight, ExternalLink, Radio, Gauge } from 'lucide-react';
 import StatusBadge from '@/components/ui/StatusBadge';
 import CapacityBar from '@/components/ui/CapacityBar';
 import ServerProfileModal from './ServerProfileModal';
-
-function formatBytes(bytes) {
-  const value = Number(bytes);
-  if (!Number.isFinite(value) || value <= 0) return '—';
-  if (value >= 1024 ** 3) return `${(value / 1024 ** 3).toFixed(1)} GB`;
-  if (value >= 1024 ** 2) return `${(value / 1024 ** 2).toFixed(0)} MB`;
-  return `${Math.round(value / 1024)} KB`;
-}
-
-function formatUptime(seconds) {
-  const value = Number(seconds);
-  if (!Number.isFinite(value) || value < 0) return '—';
-  const days = Math.floor(value / 86400);
-  const hours = Math.floor((value % 86400) / 3600);
-  const minutes = Math.floor((value % 3600) / 60);
-  if (days) return `${days}d ${hours}h`;
-  if (hours) return `${hours}h ${minutes}m`;
-  return `${minutes}m`;
-}
 
 export default function ServerCard({ server, index }) {
   const [showProfile, setShowProfile] = useState(false);
@@ -48,7 +29,7 @@ export default function ServerCard({ server, index }) {
             <StatusBadge status={server.status} />
             {live?.available && (
               <span className="flex items-center gap-1 rounded border border-emerald-glow/25 bg-obsidian/75 px-2 py-1 text-[10px] font-mono text-emerald-glow">
-                <Radio size={10} className="animate-pulse" /> AMP LIVE
+                <Radio size={10} className="animate-pulse" /> LIVE QUERY
               </span>
             )}
           </div>
@@ -80,29 +61,16 @@ export default function ServerCard({ server, index }) {
 
           <CapacityBar current={server.players.current} max={server.players.max} label="CAPACITY" />
 
-          {live?.available && (
-            <div className="mt-4 grid grid-cols-3 gap-2 rounded-lg border border-emerald-glow/10 bg-emerald-glow/[0.03] p-3">
-              <div className="text-center">
-                <Cpu size={13} className="mx-auto mb-1 text-emerald-glow" />
-                <div className="font-mono text-[11px] text-foreground">{live.cpuPercent == null ? '—' : `${Math.round(live.cpuPercent)}%`}</div>
-                <div className="text-[9px] uppercase tracking-wider text-muted-foreground">CPU</div>
-              </div>
-              <div className="text-center">
-                <MemoryStick size={13} className="mx-auto mb-1 text-gold" />
-                <div className="font-mono text-[11px] text-foreground">{formatBytes(live.memoryBytes)}</div>
-                <div className="text-[9px] uppercase tracking-wider text-muted-foreground">RAM</div>
-              </div>
-              <div className="text-center">
-                <Clock3 size={13} className="mx-auto mb-1 text-sky-300" />
-                <div className="font-mono text-[11px] text-foreground">{formatUptime(live.uptimeSeconds)}</div>
-                <div className="text-[9px] uppercase tracking-wider text-muted-foreground">Uptime</div>
-              </div>
+          {live?.available && live.ping != null && (
+            <div className="mt-4 flex items-center justify-center gap-2 rounded-lg border border-emerald-glow/10 bg-emerald-glow/[0.03] p-3 text-xs font-mono text-muted-foreground">
+              <Gauge size={14} className="text-emerald-glow" />
+              Query response: <span className="text-foreground">{Math.round(live.ping)} ms</span>
             </div>
           )}
 
           {live && !live.available && (
             <div className="mt-4 rounded-lg border border-amber-400/20 bg-amber-400/5 px-3 py-2 text-[11px] font-mono text-amber-200">
-              Live AMP data is temporarily unavailable. Showing saved server details.
+              Live server information is temporarily unavailable. Showing saved server details.
             </div>
           )}
 
