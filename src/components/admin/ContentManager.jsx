@@ -14,7 +14,7 @@ const SECTIONS = {
       ['image', 'Image URL'], ['description', 'Description', 'textarea'],
       ['ip', 'Connection Address'], ['join_link', 'Join Button URL'],
       ['join_instructions', 'Joining Instructions', 'textarea'],
-      ['battlemetrics_id', 'BattleMetrics Server ID'],
+      ['query_host', 'Query Host'], ['query_port', 'Query Port', 'number'],
       ['live_map_url', 'Live Map URL'], ['discord_channel_url', 'Discord Channel URL'],
       ['map', 'Fallback Map'], ['version', 'Fallback Version'],
       ['players_max', 'Fallback Max Players', 'number'], ['mods', 'Mods / Plugins (comma separated)'],
@@ -131,7 +131,15 @@ export default function ContentManager() {
 
   useEffect(() => { setEditing(null); load(); }, [entity]);
 
-  const startNew = () => { setEditing('new'); setForm(emptyFor(section)); };
+  const startNew = () => {
+    setEditing('new');
+    const next = emptyFor(section);
+    if (entity === 'Server') {
+      next.query_host = '127.0.0.1';
+      next.query_port = 26903;
+    }
+    setForm(next);
+  };
   const startEdit = (row) => { setEditing(row.id); setForm(formForRow(section, row)); };
   const cancel = () => { setEditing(null); setForm({}); };
 
@@ -193,7 +201,7 @@ export default function ContentManager() {
             </div>
             {entity === 'Server' && (
               <div className="mt-4 rounded-lg border border-white/10 bg-black/20 p-3 text-xs text-gray-400">
-                Add the numeric BattleMetrics server ID to enable public live status and player counts. The Apex Bloodlines server defaults to <strong>39889715</strong> when this field is left empty.
+                Live status is queried directly using the Valve protocol. For the local 7 Days to Die server use <strong>127.0.0.1</strong> and query port <strong>26903</strong>.
               </div>
             )}
             <div className="mt-4 flex flex-wrap gap-2">
@@ -208,7 +216,7 @@ export default function ContentManager() {
             <div key={row.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-white/5 bg-white/[0.02] p-4">
               <div className="min-w-0">
                 <div className="truncate font-bold text-white">{row[section.title] || row.title || row.name || row.id}</div>
-                <div className="mt-1 text-xs text-gray-500">{entity === 'Server' && row.battlemetrics_id ? 'BATTLEMETRICS LIVE · ' : ''}{row.status || row.category || row.game || row.email || row.discord_id || row.id}</div>
+                <div className="mt-1 text-xs text-gray-500">{entity === 'Server' && row.query_port ? `LIVE QUERY ${row.query_host || '127.0.0.1'}:${row.query_port} · ` : ''}{row.status || row.category || row.game || row.email || row.discord_id || row.id}</div>
               </div>
               <div className="flex flex-wrap gap-2">
                 {section.statusOnly && ['pending', 'approved', 'rejected'].map((status) => <button key={status} onClick={() => updateStatus(row, status)} className="rounded border border-white/10 px-2 py-1 text-xs text-gray-300">{status}</button>)}
