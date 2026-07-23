@@ -26,7 +26,9 @@ const SECTIONS = {
       ['name', 'Server Name'], ['game', 'Game'],
       ['tag', 'Category', 'select', ['SURVIVAL', 'ROLEPLAY', 'SANDBOX', 'HARDCORE', 'FPS', 'STRATEGY']],
       ['status', 'Fallback Status', 'select', ['offline', 'online', 'maintenance']],
-      ['image', 'Image URL'], ['description', 'Description', 'textarea'],
+      ['image', 'Image URL'],
+      ['banner_position', 'Banner Position', 'select', ['top', 'upper', 'center', 'lower', 'bottom']],
+      ['description', 'Description', 'textarea'],
       ['ip', 'Connection Address'], ['join_link', 'Join Button URL'],
       ['join_instructions', 'Joining Instructions', 'textarea'],
       ['query_type', 'Query Protocol / Game Type', 'select', QUERY_TYPES],
@@ -154,6 +156,7 @@ export default function ContentManager() {
       next.query_type = 'protocol-valve';
       next.query_host = '127.0.0.1';
       next.query_port = 26903;
+      next.banner_position = 'center';
     }
     setForm(next);
   };
