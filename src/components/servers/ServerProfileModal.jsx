@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, Users, Map, Cpu, Copy, Check, MemoryStick, Clock3, Gamepad2, ExternalLink, Radio, Gauge, UserRound, Timer, Trophy, Wifi } from 'lucide-react';
 import CapacityBar from '@/components/ui/CapacityBar';
 import StatusBadge from '@/components/ui/StatusBadge';
+import MarkdownContent from '@/components/ui/MarkdownContent';
 
 function formatBytes(bytes) {
   const value = Number(bytes);
@@ -109,7 +110,7 @@ export default function ServerProfileModal({ server, onClose }) {
               {fetchedAt && <div className="text-[10px] font-mono text-muted-foreground">UPDATED {fetchedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</div>}
             </div>
 
-            {server.description && <p className="text-sm leading-relaxed mb-5" style={{ color: 'rgba(255,255,255,0.55)' }}>{server.description}</p>}
+            <MarkdownContent className="mb-5 text-sm text-white/55">{server.description}</MarkdownContent>
 
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-5">
               <Metric icon={Users} label="PLAYERS" value={`${server.players?.current ?? 0}/${server.players?.max ?? 32}`} />
@@ -130,7 +131,6 @@ export default function ServerProfileModal({ server, onClose }) {
                   <div className="flex items-center gap-1.5"><Users size={13} className="text-emerald-glow" /><span className="text-xs font-mono tracking-wider text-emerald-glow">ONLINE PLAYERS</span></div>
                   <span className="text-[10px] font-mono text-muted-foreground">{server.players?.current ?? players.length} CONNECTED</span>
                 </div>
-
                 {players.length > 0 ? (
                   <div className="space-y-2">
                     {players.map((player, playerIndex) => {
@@ -167,7 +167,7 @@ export default function ServerProfileModal({ server, onClose }) {
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
                           <div className="font-semibold text-foreground">{mod.name}</div>
-                          {mod.description && <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{mod.description}</p>}
+                          {mod.description && <MarkdownContent className="mt-1 text-xs text-muted-foreground">{mod.description}</MarkdownContent>}
                         </div>
                         {mod.url && <a href={mod.url} target="_blank" rel="noopener noreferrer" className="shrink-0 text-gold hover:text-foreground" aria-label={`Open ${mod.name}`}><ExternalLink size={15} /></a>}
                       </div>
@@ -180,7 +180,7 @@ export default function ServerProfileModal({ server, onClose }) {
             {(server.ip || server.joinInstructions) && (
               <div className="mt-5 p-4 rounded-lg" style={{ background: 'rgba(16,255,139,0.04)', border: '1px solid rgba(16,255,139,0.12)' }}>
                 <div className="text-xs font-mono tracking-wider mb-3" style={{ color: 'rgba(16,255,139,0.55)' }}>CONNECT</div>
-                {server.joinInstructions && <p className="text-sm mb-3" style={{ color: 'rgba(255,255,255,0.55)' }}>{server.joinInstructions}</p>}
+                <MarkdownContent className="mb-3 text-sm text-white/55">{server.joinInstructions}</MarkdownContent>
                 {server.ip && <button onClick={handleCopy} className="w-full flex items-center justify-between px-3 py-2.5 rounded" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(16,255,139,0.2)' }}><span className="font-mono text-sm" style={{ color: '#10FF8B' }}>{server.ip}</span>{copied ? <Check size={14} style={{ color: '#10FF8B' }} /> : <Copy size={14} style={{ color: 'rgba(255,255,255,0.4)' }} />}</button>}
               </div>
             )}

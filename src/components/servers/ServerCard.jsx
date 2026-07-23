@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { Users, Map, ChevronRight, ExternalLink, Radio, Gauge } from 'lucide-react';
 import StatusBadge from '@/components/ui/StatusBadge';
 import CapacityBar from '@/components/ui/CapacityBar';
+import MarkdownContent from '@/components/ui/MarkdownContent';
 import ServerProfileModal from './ServerProfileModal';
 
 function getJoinUrl(server) {
@@ -52,7 +53,7 @@ export default function ServerCard({ server, index }) {
           <h3 className="text-xl font-heading font-bold text-foreground mb-1 group-hover:text-emerald-glow transition-colors">
             {server.name}
           </h3>
-          <p className="text-muted-foreground text-sm leading-relaxed mb-4">{server.description}</p>
+          <MarkdownContent className="mb-4 text-sm text-muted-foreground line-clamp-[12]">{server.description}</MarkdownContent>
 
           <div className="grid grid-cols-2 gap-3 mb-4">
             <div className="flex items-center gap-2 text-sm">
