@@ -5,9 +5,17 @@ import StatusBadge from '@/components/ui/StatusBadge';
 import CapacityBar from '@/components/ui/CapacityBar';
 import ServerProfileModal from './ServerProfileModal';
 
+function getJoinUrl(server) {
+  if (server.joinUrl) return server.joinUrl;
+  const address = String(server.ip || '').trim();
+  if (!address) return '';
+  return `steam://connect/${address}`;
+}
+
 export default function ServerCard({ server, index }) {
   const [showProfile, setShowProfile] = useState(false);
   const live = server.live;
+  const joinUrl = getJoinUrl(server);
 
   return (
     <motion.div
@@ -76,11 +84,14 @@ export default function ServerCard({ server, index }) {
 
           {server.mods && server.mods.length > 0 && (
             <div className="mt-4 flex flex-wrap gap-1.5">
-              {server.mods.slice(0, 3).map(mod => (
-                <span key={mod} className="text-xs font-mono px-2 py-0.5 rounded bg-obsidian-light border border-border text-muted-foreground">
-                  {mod}
-                </span>
-              ))}
+              {server.mods.slice(0, 3).map((mod) => {
+                const name = String(mod).split('|')[0].trim();
+                return (
+                  <span key={mod} className="text-xs font-mono px-2 py-0.5 rounded bg-obsidian-light border border-border text-muted-foreground">
+                    {name}
+                  </span>
+                );
+              })}
               {server.mods.length > 3 && (
                 <span className="text-xs font-mono px-2 py-0.5 rounded bg-obsidian-light border border-border text-gold">
                   +{server.mods.length - 3}
@@ -97,11 +108,9 @@ export default function ServerCard({ server, index }) {
               VIEW PROFILE
               <ChevronRight size={14} />
             </button>
-            {server.joinUrl && (
+            {joinUrl && (
               <a
-                href={server.joinUrl}
-                target="_blank"
-                rel="noopener noreferrer"
+                href={joinUrl}
                 className="px-5 py-2.5 bg-emerald-glow border border-emerald-glow text-obsidian font-semibold text-xs tracking-wider rounded hover:bg-emerald-glow/90 transition-all flex items-center justify-center gap-2"
               >
                 JOIN
