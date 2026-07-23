@@ -20,6 +20,7 @@ function dbServerToShape(s) {
     status: String(s.status || 'offline').toLowerCase(),
     description: s.description || '',
     image: s.image,
+    bannerPosition: s.banner_position || 'center',
     players: { current: s.players_current || 0, max: s.players_max || s.max_players || 32 },
     map: s.map || '',
     version: s.version || '',
