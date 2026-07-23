@@ -104,21 +104,12 @@ export default function ServerProfileModal({ server, onClose }) {
         >
           <div className="relative h-52 overflow-hidden bg-black">
             {server.image ? (
-              <>
-                <img
-                  src={server.image}
-                  alt=""
-                  aria-hidden="true"
-                  className="absolute inset-0 h-full w-full scale-110 object-cover opacity-30 blur-xl"
-                  style={{ objectPosition: bannerPosition }}
-                />
-                <img
-                  src={server.image}
-                  alt={server.name}
-                  className="relative h-full w-full object-contain opacity-90"
-                  style={{ objectPosition: bannerPosition }}
-                />
-              </>
+              <img
+                src={server.image}
+                alt={server.name}
+                className="h-full w-full object-cover opacity-90"
+                style={{ objectPosition: bannerPosition }}
+              />
             ) : <div className="w-full h-full" style={{ background: 'linear-gradient(135deg, #0a1a0a, #050a05)' }} />}
             <div className="absolute inset-0" style={{ background: 'linear-gradient(to top, rgba(6,14,6,1) 0%, rgba(6,14,6,0.25) 65%, transparent 100%)' }} />
             <div className="absolute top-4 left-4 flex gap-2">
