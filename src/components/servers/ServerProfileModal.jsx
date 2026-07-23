@@ -91,7 +91,7 @@ export default function ServerProfileModal({ server, onClose }) {
           style={{ background: 'rgba(6,14,6,0.99)', border: '1px solid rgba(16,255,139,0.2)' }}
         >
           <div className="relative h-52 overflow-hidden">
-            {server.image ? <img src={server.image} alt={server.name} className="w-full h-full object-cover opacity-70" /> : <div className="w-full h-full" style={{ background: 'linear-gradient(135deg, #0a1a0a, #050a05)' }} />}
+            {server.image ? <img src={server.image} alt={server.name} className="w-full h-full object-cover object-top opacity-70" /> : <div className="w-full h-full" style={{ background: 'linear-gradient(135deg, #0a1a0a, #050a05)' }} />}
             <div className="absolute inset-0" style={{ background: 'linear-gradient(to top, rgba(6,14,6,1) 0%, rgba(6,14,6,0.25) 65%, transparent 100%)' }} />
             <div className="absolute top-4 left-4 flex gap-2">
               <span className="px-2 py-1 text-xs font-mono font-bold rounded" style={{ background: 'rgba(5,10,5,0.8)', border: '1px solid rgba(212,175,55,0.4)', color: '#D4AF37' }}>{server.tag}</span>
