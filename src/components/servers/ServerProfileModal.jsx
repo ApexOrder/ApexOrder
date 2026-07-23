@@ -34,6 +34,21 @@ function formatSessionTime(seconds) {
   return `${secs}s`;
 }
 
+function parseMods(value) {
+  const list = Array.isArray(value) ? value : String(value || '').split(',').map((item) => item.trim()).filter(Boolean);
+  return list.map((entry) => {
+    const [name = '', description = '', url = ''] = String(entry).split('|').map((part) => part.trim());
+    return { name, description, url };
+  }).filter((mod) => mod.name);
+}
+
+function getJoinUrl(server) {
+  if (server.joinUrl) return server.joinUrl;
+  const address = String(server.ip || '').trim();
+  if (!address) return '';
+  return `steam://connect/${address}`;
+}
+
 function Metric({ icon: Icon, label, value, accent = '#10FF8B' }) {
   return (
     <div className="rounded-lg p-3" style={{ background: `${accent}0A`, border: `1px solid ${accent}22` }}>
@@ -49,6 +64,10 @@ function Metric({ icon: Icon, label, value, accent = '#10FF8B' }) {
 export default function ServerProfileModal({ server, onClose }) {
   const [copied, setCopied] = useState(false);
   const live = server.live;
+  const mods = parseMods(server.mods);
+  const joinUrl = getJoinUrl(server);
+  const fetchedAt = live?.fetchedAt ? new Date(live.fetchedAt) : null;
+  const players = Array.isArray(live?.players) ? live.players : [];
 
   const handleCopy = async () => {
     if (!server.ip) return;
@@ -56,10 +75,6 @@ export default function ServerProfileModal({ server, onClose }) {
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
-
-  const mods = Array.isArray(server.mods) ? server.mods : String(server.mods || '').split(',').map(m => m.trim()).filter(Boolean);
-  const fetchedAt = live?.fetchedAt ? new Date(live.fetchedAt) : null;
-  const players = Array.isArray(live?.players) ? live.players : [];
 
   return (
     <AnimatePresence>
@@ -101,6 +116,7 @@ export default function ServerProfileModal({ server, onClose }) {
               <Metric icon={Map} label="MAP" value={server.map || 'Unknown'} accent="#D4AF37" />
               <Metric icon={Gauge} label="STATE" value={live?.state || server.status} accent="#7DD3FC" />
               {live?.ping != null && <Metric icon={Wifi} label="PING" value={`${Math.round(live.ping)} ms`} accent="#7DD3FC" />}
+              {mods.length > 0 && <Metric icon={Gamepad2} label="MODS" value={String(mods.length)} accent="#D4AF37" />}
               {server.showPerformance && <Metric icon={Cpu} label="CPU" value={live?.cpuPercent == null ? '—' : `${Math.round(live.cpuPercent)}%`} />}
               {server.showPerformance && <Metric icon={MemoryStick} label="RAM" value={formatBytes(live?.memoryBytes)} accent="#D4AF37" />}
               {server.showPerformance && <Metric icon={Clock3} label="UPTIME" value={formatUptime(live?.uptimeSeconds)} accent="#7DD3FC" />}
@@ -136,7 +152,7 @@ export default function ServerProfileModal({ server, onClose }) {
                   </div>
                 ) : (
                   <div className="rounded-lg border border-white/8 bg-white/[0.02] px-3 py-4 text-center text-xs font-mono text-muted-foreground">
-                    No players are currently online.
+                    {(server.players?.current ?? 0) > 0 ? 'Player names are not exposed by this server query.' : 'No players are currently online.'}
                   </div>
                 )}
               </div>
@@ -144,8 +160,20 @@ export default function ServerProfileModal({ server, onClose }) {
 
             {mods.length > 0 && (
               <div className="mt-5">
-                <div className="flex items-center gap-1.5 mb-2"><Gamepad2 size={12} className="text-muted-foreground" /><span className="text-xs font-mono tracking-wider text-muted-foreground">MODS / PLUGINS</span></div>
-                <div className="flex flex-wrap gap-1.5">{mods.map(mod => <span key={mod} className="text-xs font-mono px-2 py-0.5 rounded" style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.6)' }}>{mod}</span>)}</div>
+                <div className="flex items-center gap-1.5 mb-3"><Gamepad2 size={13} className="text-gold" /><span className="text-xs font-mono tracking-wider text-gold">FEATURED MODS / PLUGINS</span></div>
+                <div className="space-y-2">
+                  {mods.map((mod) => (
+                    <div key={`${mod.name}-${mod.url}`} className="rounded-lg p-3" style={{ background: 'rgba(212,175,55,0.035)', border: '1px solid rgba(212,175,55,0.16)' }}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="font-semibold text-foreground">{mod.name}</div>
+                          {mod.description && <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{mod.description}</p>}
+                        </div>
+                        {mod.url && <a href={mod.url} target="_blank" rel="noopener noreferrer" className="shrink-0 text-gold hover:text-foreground" aria-label={`Open ${mod.name}`}><ExternalLink size={15} /></a>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 
@@ -158,7 +186,7 @@ export default function ServerProfileModal({ server, onClose }) {
             )}
 
             <div className="mt-5 grid grid-cols-1 sm:grid-cols-3 gap-2">
-              {server.joinUrl && <a href={server.joinUrl} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-2 rounded px-4 py-3 text-xs font-bold tracking-wider bg-emerald-glow text-obsidian">JOIN SERVER <ExternalLink size={13} /></a>}
+              {joinUrl && <a href={joinUrl} className="flex items-center justify-center gap-2 rounded px-4 py-3 text-xs font-bold tracking-wider bg-emerald-glow text-obsidian">JOIN SERVER <ExternalLink size={13} /></a>}
               {server.liveMapUrl && <a href={server.liveMapUrl} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-2 rounded border border-gold/30 bg-gold/5 px-4 py-3 text-xs font-bold tracking-wider text-gold">LIVE MAP <ExternalLink size={13} /></a>}
               {server.discordChannelUrl && <a href={server.discordChannelUrl} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-2 rounded border border-sky-400/30 bg-sky-400/5 px-4 py-3 text-xs font-bold tracking-wider text-sky-300">DISCORD <ExternalLink size={13} /></a>}
             </div>
