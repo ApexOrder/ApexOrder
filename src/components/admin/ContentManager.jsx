@@ -17,6 +17,20 @@ const QUERY_TYPES = [
   'mumble',
 ];
 
+const LEGACY_BANNER_OFFSETS = {
+  top: 0,
+  upper: 18,
+  center: 36,
+  lower: 54,
+  bottom: 72,
+};
+
+function normaliseBannerOffset(value) {
+  const numeric = Number(value);
+  if (Number.isFinite(numeric)) return Math.max(0, Math.min(120, numeric));
+  return LEGACY_BANNER_OFFSETS[value] ?? 36;
+}
+
 const SECTIONS = {
   Server: {
     label: 'Servers',
@@ -27,7 +41,7 @@ const SECTIONS = {
       ['tag', 'Category', 'select', ['SURVIVAL', 'ROLEPLAY', 'SANDBOX', 'HARDCORE', 'FPS', 'STRATEGY']],
       ['status', 'Fallback Status', 'select', ['offline', 'online', 'maintenance']],
       ['image', 'Image URL'],
-      ['banner_position', 'Banner Position', 'select', ['top', 'upper', 'center', 'lower', 'bottom']],
+      ['banner_position', 'Banner Offset (px)', 'banner-offset'],
       ['description', 'Description', 'textarea'],
       ['ip', 'Connection Address'], ['join_link', 'Join Button URL'],
       ['join_instructions', 'Joining Instructions', 'textarea'],
@@ -97,17 +111,51 @@ const SECTIONS = {
 function emptyFor(section) {
   return Object.fromEntries((section.fields || []).map(([key, , type, options]) => [
     key,
-    type === 'number' ? 0 : type === 'boolean' ? true : type === 'select' ? options?.[0] || '' : '',
+    type === 'number' ? 0 : type === 'boolean' ? true : type === 'select' ? options?.[0] || '' : type === 'banner-offset' ? 36 : '',
   ]));
 }
 
 function formForRow(section, row) {
-  return { ...emptyFor(section), ...row };
+  const next = { ...emptyFor(section), ...row };
+  if (Object.prototype.hasOwnProperty.call(next, 'banner_position')) {
+    next.banner_position = normaliseBannerOffset(next.banner_position);
+  }
+  return next;
 }
 
 function Field({ spec, value, onChange }) {
   const [key, label, type = 'text', options = []] = spec;
   const common = 'w-full rounded-lg border border-emerald-400/20 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-emerald-400/60';
+
+  if (type === 'banner-offset') {
+    const offset = normaliseBannerOffset(value);
+    return (
+      <label className="md:col-span-2">
+        <span className="mb-1 block text-xs font-bold uppercase tracking-wider text-emerald-300">{label}</span>
+        <div className="flex items-center gap-4 rounded-lg border border-emerald-400/20 bg-black/40 px-3 py-3">
+          <input
+            className="min-w-0 flex-1 accent-emerald-400"
+            type="range"
+            min="0"
+            max="120"
+            step="1"
+            value={offset}
+            onChange={(event) => onChange(key, Number(event.target.value))}
+          />
+          <input
+            className="w-20 rounded-md border border-emerald-400/20 bg-black/50 px-2 py-1 text-right text-sm text-white outline-none focus:border-emerald-400/60"
+            type="number"
+            min="0"
+            max="120"
+            value={offset}
+            onChange={(event) => onChange(key, normaliseBannerOffset(event.target.value))}
+          />
+          <span className="text-xs text-gray-500">px</span>
+        </div>
+        <span className="mt-1 block text-[11px] text-gray-500">Move the full-width artwork down without resizing it.</span>
+      </label>
+    );
+  }
 
   return (
     <label className={type === 'textarea' ? 'md:col-span-2' : ''}>
@@ -156,7 +204,7 @@ export default function ContentManager() {
       next.query_type = 'protocol-valve';
       next.query_host = '127.0.0.1';
       next.query_port = 26903;
-      next.banner_position = 'center';
+      next.banner_position = 36;
     }
     setForm(next);
   };
@@ -192,6 +240,7 @@ export default function ContentManager() {
   };
 
   const summary = useMemo(() => `${rows.length} ${section.label.toLowerCase()}`, [rows.length, section.label]);
+  const previewOffset = normaliseBannerOffset(form.banner_position);
 
   return (
     <div className="space-y-5">
@@ -219,6 +268,23 @@ export default function ContentManager() {
             <div className="grid gap-4 md:grid-cols-2">
               {section.fields.map((spec) => <Field key={spec[0]} spec={spec} value={form[spec[0]]} onChange={(key, value) => setForm((current) => ({ ...current, [key]: value }))} />)}
             </div>
+            {entity === 'Server' && form.image && (
+              <div className="mt-4">
+                <div className="mb-2 flex items-center justify-between text-xs font-bold uppercase tracking-wider text-emerald-300">
+                  <span>Banner Live Preview</span>
+                  <span>{previewOffset}px</span>
+                </div>
+                <div className="relative h-52 overflow-hidden rounded-lg border border-emerald-400/20 bg-black">
+                  <img
+                    src={form.image}
+                    alt="Banner position preview"
+                    className="absolute inset-x-0 top-0 h-auto min-h-full w-full max-w-none opacity-90"
+                    style={{ transform: `translateY(${previewOffset}px)` }}
+                  />
+                  <div className="absolute inset-0" style={{ background: 'linear-gradient(to top, rgba(6,14,6,1) 0%, rgba(6,14,6,0.25) 65%, transparent 100%)' }} />
+                </div>
+              </div>
+            )}
             {entity === 'Server' && (
               <div className="mt-4 rounded-lg border border-white/10 bg-black/20 p-3 text-xs text-gray-400">
                 Choose the matching GameDig type. Use <strong>protocol-valve</strong> for 7 Days to Die and most Steam/Source queries, or <strong>dayz</strong> for DayZ. For servers on another VM, use that VM's reachable LAN/NAT address rather than 127.0.0.1.
