@@ -50,15 +50,15 @@ function getJoinUrl(server) {
   return `steam://connect/${address}`;
 }
 
-function getBannerPosition(position) {
-  const positions = {
-    top: 'center 0%',
-    upper: 'center 20%',
-    center: 'center 50%',
-    lower: 'center 75%',
-    bottom: 'center 100%',
+function getBannerOffset(position) {
+  const offsets = {
+    top: 0,
+    upper: 18,
+    center: 36,
+    lower: 54,
+    bottom: 72,
   };
-  return positions[position] || positions.center;
+  return offsets[position] ?? offsets.center;
 }
 
 function Metric({ icon: Icon, label, value, accent = '#10FF8B' }) {
@@ -80,7 +80,7 @@ export default function ServerProfileModal({ server, onClose }) {
   const joinUrl = getJoinUrl(server);
   const fetchedAt = live?.fetchedAt ? new Date(live.fetchedAt) : null;
   const players = Array.isArray(live?.players) ? live.players : [];
-  const bannerPosition = getBannerPosition(server.bannerPosition);
+  const bannerOffset = getBannerOffset(server.bannerPosition);
 
   const handleCopy = async () => {
     if (!server.ip) return;
@@ -107,8 +107,8 @@ export default function ServerProfileModal({ server, onClose }) {
               <img
                 src={server.image}
                 alt={server.name}
-                className="h-full w-full object-cover opacity-90"
-                style={{ objectPosition: bannerPosition }}
+                className="absolute inset-x-0 top-0 h-auto min-h-full w-full max-w-none opacity-90"
+                style={{ transform: `translateY(${bannerOffset}px)` }}
               />
             ) : <div className="w-full h-full" style={{ background: 'linear-gradient(135deg, #0a1a0a, #050a05)' }} />}
             <div className="absolute inset-0" style={{ background: 'linear-gradient(to top, rgba(6,14,6,1) 0%, rgba(6,14,6,0.25) 65%, transparent 100%)' }} />
