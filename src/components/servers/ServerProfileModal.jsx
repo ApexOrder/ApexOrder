@@ -50,15 +50,18 @@ function getJoinUrl(server) {
   return `steam://connect/${address}`;
 }
 
-function getBannerOffset(position) {
-  const offsets = {
+function getBannerOffset(value) {
+  const numericOffset = Number(value);
+  if (Number.isFinite(numericOffset)) return Math.max(0, Math.min(120, numericOffset));
+
+  const legacyOffsets = {
     top: 0,
     upper: 18,
     center: 36,
     lower: 54,
     bottom: 72,
   };
-  return offsets[position] ?? offsets.center;
+  return legacyOffsets[value] ?? legacyOffsets.center;
 }
 
 function Metric({ icon: Icon, label, value, accent = '#10FF8B' }) {
