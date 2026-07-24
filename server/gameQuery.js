@@ -3,6 +3,7 @@ import { GameDig } from 'gamedig';
 const cache = new Map();
 const cacheTtlMs = Math.max(5000, Number(process.env.GAME_QUERY_CACHE_MS || 15000));
 const queryTimeoutMs = Math.max(1000, Number(process.env.GAME_QUERY_TIMEOUT_MS || 5000));
+const loggedPlayerShapes = new Set();
 
 const supportedQueryTypes = new Set([
   'protocol-valve',
@@ -19,19 +20,89 @@ const supportedQueryTypes = new Set([
   'mumble',
 ]);
 
+const steamIdKeys = [
+  'steamId',
+  'steamID',
+  'steamid',
+  'steam_id',
+  'steamID64',
+  'steamId64',
+  'steamid64',
+  'steam_id_64',
+  'steam',
+  'communityId',
+  'communityID',
+  'community_id',
+];
+
 function numberOrNull(value) {
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
 }
 
-function normalisePlayers(players) {
+function validSteamId(value) {
+  const candidate = String(value ?? '').trim();
+  return /^7656119\d{10}$/.test(candidate) ? candidate : null;
+}
+
+function findSteamId(value, depth = 0) {
+  if (depth > 3 || value === null || value === undefined) return null;
+
+  const direct = validSteamId(value);
+  if (direct) return direct;
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const found = findSteamId(item, depth + 1);
+      if (found) return found;
+    }
+    return null;
+  }
+
+  if (typeof value !== 'object') return null;
+
+  for (const key of steamIdKeys) {
+    if (!(key in value)) continue;
+    const found = findSteamId(value[key], depth + 1);
+    if (found) return found;
+  }
+
+  for (const nested of Object.values(value)) {
+    const found = findSteamId(nested, depth + 1);
+    if (found) return found;
+  }
+
+  return null;
+}
+
+function logUnknownPlayerShape(player, queryType) {
+  const keys = Object.keys(player || {}).sort();
+  const signature = `${queryType}:${keys.join(',')}`;
+  if (loggedPlayerShapes.has(signature)) return;
+
+  loggedPlayerShapes.add(signature);
+  console.info('[GameQuery] Player payload has no SteamID64. Raw payload for field discovery:', {
+    queryType,
+    keys,
+    player,
+  });
+}
+
+function normalisePlayers(players, queryType) {
   if (!Array.isArray(players)) return [];
+
   return players
-    .map((player) => ({
-      name: String(player?.name || '').trim(),
-      score: numberOrNull(player?.score),
-      time: numberOrNull(player?.time),
-    }))
+    .map((player) => {
+      const steamId = findSteamId(player);
+      if (!steamId) logUnknownPlayerShape(player, queryType);
+
+      return {
+        steamId,
+        name: String(player?.name || '').trim(),
+        score: numberOrNull(player?.score),
+        time: numberOrNull(player?.time),
+      };
+    })
     .filter((player) => player.name);
 }
 
@@ -72,7 +143,7 @@ export async function queryServerStatus(server, force = false) {
       maxAttempts: 1,
     });
 
-    const players = normalisePlayers(result.players);
+    const players = normalisePlayers(result.players, type);
     const value = {
       serverId: server.id,
       source: 'gamedig',
