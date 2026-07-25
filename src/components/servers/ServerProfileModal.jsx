@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Users, Map, Cpu, Copy, Check, MemoryStick, Clock3, Gamepad2, ExternalLink, Radio, Gauge, UserRound, Timer, Trophy, Wifi } from 'lucide-react';
+import { X, Users, Map, Cpu, Copy, Check, MemoryStick, Clock3, Gamepad2, ExternalLink, Radio, Gauge, UserRound, Timer, Trophy, Wifi, RefreshCw } from 'lucide-react';
 import CapacityBar from '@/components/ui/CapacityBar';
 import StatusBadge from '@/components/ui/StatusBadge';
 import MarkdownContent from '@/components/ui/MarkdownContent';
@@ -85,32 +85,25 @@ export default function ServerProfileModal({ server, onClose }) {
   const queryPlayers = Array.isArray(live?.players) ? live.players : [];
   const bannerOffset = getBannerOffset(server.bannerPosition);
 
-  useEffect(() => {
-    let cancelled = false;
-    const controller = new AbortController();
-
-    async function loadTrackedPlayers() {
-      setPlayersLoading(true);
-      try {
-        const response = await fetch(`/api/players/online?serverId=${encodeURIComponent(server.id)}`, { signal: controller.signal });
-        if (!response.ok) throw new Error(`Player API returned ${response.status}`);
-        const payload = await response.json();
-        if (!cancelled) setTrackedPlayers(Array.isArray(payload.items) ? payload.items : []);
-      } catch (error) {
-        if (!cancelled && error.name !== 'AbortError') setTrackedPlayers([]);
-      } finally {
-        if (!cancelled) setPlayersLoading(false);
-      }
+  const loadTrackedPlayers = useCallback(async () => {
+    setPlayersLoading(true);
+    try {
+      const response = await fetch(`/api/players/online?serverId=${encodeURIComponent(server.id)}`);
+      if (!response.ok) throw new Error(`Player API returned ${response.status}`);
+      const payload = await response.json();
+      setTrackedPlayers(Array.isArray(payload.items) ? payload.items : []);
+    } catch {
+      setTrackedPlayers([]);
+    } finally {
+      setPlayersLoading(false);
     }
+  }, [server.id]);
 
+  useEffect(() => {
     void loadTrackedPlayers();
     const timer = setInterval(loadTrackedPlayers, 30000);
-    return () => {
-      cancelled = true;
-      controller.abort();
-      clearInterval(timer);
-    };
-  }, [server.id]);
+    return () => clearInterval(timer);
+  }, [loadTrackedPlayers]);
 
   const players = trackedPlayers.length > 0
     ? trackedPlayers.map((player) => ({
@@ -172,7 +165,18 @@ export default function ServerProfileModal({ server, onClose }) {
               <div className="mt-5">
                 <div className="mb-2 flex items-center justify-between gap-3">
                   <div className="flex items-center gap-1.5"><Users size={13} className="text-emerald-glow" /><span className="text-xs font-mono tracking-wider text-emerald-glow">ONLINE PLAYERS</span></div>
-                  <span className="text-[10px] font-mono text-muted-foreground">{trackedPlayers.length || server.players?.current || players.length} CONNECTED</span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={loadTrackedPlayers}
+                      disabled={playersLoading}
+                      className="flex items-center gap-1 rounded border border-emerald-glow/20 bg-emerald-glow/5 px-2 py-1 text-[10px] font-mono text-emerald-glow transition hover:border-emerald-glow/50 hover:bg-emerald-glow/10 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <RefreshCw size={11} className={playersLoading ? 'animate-spin' : ''} />
+                      REFRESH
+                    </button>
+                    <span className="text-[10px] font-mono text-muted-foreground">{trackedPlayers.length || server.players?.current || players.length} CONNECTED</span>
+                  </div>
                 </div>
                 {playersLoading && players.length === 0 ? (
                   <div className="rounded-lg border border-white/8 bg-white/[0.02] px-3 py-4 text-center text-xs font-mono text-muted-foreground">Loading tracked players…</div>
