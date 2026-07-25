@@ -1,4 +1,4 @@
-import { SevenDaysToDiePlayerProvider } from './providers/sevenDaysToDieProvider.js';
+import { createPlayerProviderRegistry } from './providers/registry.js';
 
 function parseServerRow(row) {
   try {
@@ -11,7 +11,7 @@ function parseServerRow(row) {
 export function startPlayerPoller(db, sessionTracker, options = {}) {
   const intervalMs = Math.max(10000, Number(options.intervalMs || process.env.PLAYER_POLL_INTERVAL_MS || 30000));
   const listServers = db.prepare("SELECT id, data FROM entities WHERE entity_type = 'Server'");
-  const providers = [new SevenDaysToDiePlayerProvider()];
+  const providerRegistry = createPlayerProviderRegistry();
   let running = false;
 
   async function poll() {
@@ -20,7 +20,7 @@ export function startPlayerPoller(db, sessionTracker, options = {}) {
     try {
       const servers = listServers.all().map(parseServerRow).filter(Boolean);
       for (const server of servers) {
-        const provider = providers.find((candidate) => candidate.supports(server));
+        const provider = providerRegistry.findForServer(server);
         if (!provider) continue;
 
         try {
@@ -31,12 +31,14 @@ export function startPlayerPoller(db, sessionTracker, options = {}) {
             sessionTracker.markServerOffline(server.id, observedAt);
           } else if (observation.complete) {
             const result = sessionTracker.reconcile(server.id, observation.players, observedAt);
-            if (result.joined || result.left) console.log('[PlayerTracker]', result);
+            if (result.joined || result.left) {
+              console.log(`[PlayerTracker:${provider.providerName}]`, result);
+            }
           } else {
-            console.warn(`[PlayerTracker] ${server.id} reports players but did not expose identities; preserving current sessions.`);
+            console.warn(`[PlayerTracker:${provider.providerName}] ${server.id} reports players but did not expose every identity; preserving current sessions.`);
           }
         } catch (error) {
-          console.error(`[PlayerTracker] Failed to poll ${server.id}:`, error.message);
+          console.error(`[PlayerTracker:${provider.providerName}] Failed to poll ${server.id}:`, error.message);
         }
       }
     } finally {
@@ -48,6 +50,6 @@ export function startPlayerPoller(db, sessionTracker, options = {}) {
   timer.unref();
   void poll();
 
-  console.log(`Player tracker: enabled (${Math.round(intervalMs / 1000)}s interval)`);
+  console.log(`Player tracker: enabled (${Math.round(intervalMs / 1000)}s interval; ${providerRegistry.all().map((provider) => provider.providerName).join(', ')})`);
   return { stop: () => clearInterval(timer), poll };
 }
