@@ -29,6 +29,9 @@ function publicPlayer(row) {
     updatedAt: row.updated_at,
     totalPlaytimeSeconds: Number(row.total_playtime_seconds || 0),
     sessionCount: Number(row.session_count || 0),
+    online: Boolean(row.current_server_id),
+    currentServerId: row.current_server_id || null,
+    connectedSince: row.connected_since || null,
   };
 }
 
@@ -43,27 +46,23 @@ function publicSession(row) {
   };
 }
 
+const playerSelect = `
+  SELECT p.*,
+    COALESCE(SUM(CASE
+      WHEN ps.disconnected_at IS NULL THEN MAX(0, CAST((julianday('now') - julianday(ps.connected_at)) * 86400 AS INTEGER))
+      ELSE ps.duration_seconds
+    END), 0) AS total_playtime_seconds,
+    COUNT(ps.id) AS session_count,
+    MAX(CASE WHEN ps.id IS NOT NULL AND ps.disconnected_at IS NULL THEN ps.server_id END) AS current_server_id,
+    MAX(CASE WHEN ps.id IS NOT NULL AND ps.disconnected_at IS NULL THEN ps.connected_at END) AS connected_since
+  FROM players p
+  LEFT JOIN player_sessions ps ON ps.player_id = p.id
+`;
+
 export function createIdentityService(db) {
-  const listPlayersStatement = db.prepare(`
-    SELECT p.*,
-      COALESCE(SUM(ps.duration_seconds), 0) AS total_playtime_seconds,
-      COUNT(ps.id) AS session_count
-    FROM players p
-    LEFT JOIN player_sessions ps ON ps.player_id = p.id
-    GROUP BY p.id
-    ORDER BY p.last_seen_at DESC
-    LIMIT ? OFFSET ?
-  `);
+  const listPlayersStatement = db.prepare(`${playerSelect} GROUP BY p.id ORDER BY p.last_seen_at DESC LIMIT ? OFFSET ?`);
   const countPlayersStatement = db.prepare('SELECT COUNT(*) AS count FROM players');
-  const getPlayerStatement = db.prepare(`
-    SELECT p.*,
-      COALESCE(SUM(ps.duration_seconds), 0) AS total_playtime_seconds,
-      COUNT(ps.id) AS session_count
-    FROM players p
-    LEFT JOIN player_sessions ps ON ps.player_id = p.id
-    WHERE p.id = ?
-    GROUP BY p.id
-  `);
+  const getPlayerStatement = db.prepare(`${playerSelect} WHERE p.id = ? GROUP BY p.id`);
   const getPlayerByProviderStatement = db.prepare('SELECT * FROM players WHERE provider = ? AND provider_id = ?');
   const insertPlayerStatement = db.prepare(`
     INSERT INTO players (
@@ -86,12 +85,10 @@ export function createIdentityService(db) {
   `);
   const listSessionsStatement = db.prepare(`
     SELECT id, player_id, server_id, connected_at, disconnected_at, duration_seconds
-    FROM player_sessions
-    WHERE player_id = ?
-    ORDER BY connected_at DESC
-    LIMIT ? OFFSET ?
+    FROM player_sessions WHERE player_id = ? ORDER BY connected_at DESC LIMIT ? OFFSET ?
   `);
   const countSessionsStatement = db.prepare('SELECT COUNT(*) AS count FROM player_sessions WHERE player_id = ?');
+  const listOnlineStatement = db.prepare(`${playerSelect} WHERE ps.id IS NOT NULL AND ps.disconnected_at IS NULL GROUP BY p.id ORDER BY ps.connected_at ASC`);
 
   const upsertPlayerTransaction = db.transaction((player) => {
     const provider = String(player.provider || '').trim().toLowerCase();
@@ -99,7 +96,7 @@ export function createIdentityService(db) {
     const displayName = String(player.displayName || '').trim();
     if (!provider || !providerId || !displayName) throw new Error('provider, providerId and displayName are required.');
 
-    const now = new Date().toISOString();
+    const now = player.seenAt || new Date().toISOString();
     const existing = getPlayerByProviderStatement.get(provider, providerId);
     if (existing) {
       updatePlayerStatement.run({
@@ -132,23 +129,18 @@ export function createIdentityService(db) {
     listPlayers(options = {}) {
       const limit = clampLimit(options.limit);
       const offset = clampOffset(options.offset);
-      return {
-        items: listPlayersStatement.all(limit, offset).map(publicPlayer),
-        total: Number(countPlayersStatement.get().count),
-        limit,
-        offset,
-      };
+      return { items: listPlayersStatement.all(limit, offset).map(publicPlayer), total: Number(countPlayersStatement.get().count), limit, offset };
     },
-
+    listOnlinePlayers() {
+      return listOnlineStatement.all().map(publicPlayer);
+    },
     getPlayer(id) {
       return publicPlayer(getPlayerStatement.get(String(id)));
     },
-
     upsertPlayer(player) {
       const id = upsertPlayerTransaction(player);
       return publicPlayer(getPlayerStatement.get(id));
     },
-
     listSessions(playerId, options = {}) {
       const limit = clampLimit(options.limit);
       const offset = clampOffset(options.offset);

@@ -6,6 +6,11 @@ export function registerIdentityRoutes(app, identityService) {
     }));
   });
 
+  app.get('/api/players/online', (_request, response) => {
+    const items = identityService.listOnlinePlayers();
+    response.json({ items, total: items.length });
+  });
+
   app.get('/api/players/:id', (request, response) => {
     const player = identityService.getPlayer(request.params.id);
     if (!player) return response.status(404).json({ error: 'Player not found.' });
