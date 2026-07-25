@@ -89,6 +89,7 @@ export function createIdentityService(db) {
   `);
   const countSessionsStatement = db.prepare('SELECT COUNT(*) AS count FROM player_sessions WHERE player_id = ?');
   const listOnlineStatement = db.prepare(`${playerSelect} WHERE ps.id IS NOT NULL AND ps.disconnected_at IS NULL GROUP BY p.id ORDER BY ps.connected_at ASC`);
+  const listOnlineByServerStatement = db.prepare(`${playerSelect} WHERE ps.id IS NOT NULL AND ps.disconnected_at IS NULL AND ps.server_id = ? GROUP BY p.id ORDER BY ps.connected_at ASC`);
 
   const upsertPlayerTransaction = db.transaction((player) => {
     const provider = String(player.provider || '').trim().toLowerCase();
@@ -131,8 +132,10 @@ export function createIdentityService(db) {
       const offset = clampOffset(options.offset);
       return { items: listPlayersStatement.all(limit, offset).map(publicPlayer), total: Number(countPlayersStatement.get().count), limit, offset };
     },
-    listOnlinePlayers() {
-      return listOnlineStatement.all().map(publicPlayer);
+    listOnlinePlayers(options = {}) {
+      const serverId = String(options.serverId || '').trim();
+      const rows = serverId ? listOnlineByServerStatement.all(serverId) : listOnlineStatement.all();
+      return rows.map(publicPlayer);
     },
     getPlayer(id) {
       return publicPlayer(getPlayerStatement.get(String(id)));
