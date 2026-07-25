@@ -53,8 +53,8 @@ const playerSelect = `
       ELSE ps.duration_seconds
     END), 0) AS total_playtime_seconds,
     COUNT(ps.id) AS session_count,
-    MAX(CASE WHEN ps.disconnected_at IS NULL THEN ps.server_id END) AS current_server_id,
-    MAX(CASE WHEN ps.disconnected_at IS NULL THEN ps.connected_at END) AS connected_since
+    MAX(CASE WHEN ps.id IS NOT NULL AND ps.disconnected_at IS NULL THEN ps.server_id END) AS current_server_id,
+    MAX(CASE WHEN ps.id IS NOT NULL AND ps.disconnected_at IS NULL THEN ps.connected_at END) AS connected_since
   FROM players p
   LEFT JOIN player_sessions ps ON ps.player_id = p.id
 `;
@@ -88,7 +88,7 @@ export function createIdentityService(db) {
     FROM player_sessions WHERE player_id = ? ORDER BY connected_at DESC LIMIT ? OFFSET ?
   `);
   const countSessionsStatement = db.prepare('SELECT COUNT(*) AS count FROM player_sessions WHERE player_id = ?');
-  const listOnlineStatement = db.prepare(`${playerSelect} WHERE ps.disconnected_at IS NULL GROUP BY p.id ORDER BY ps.connected_at ASC`);
+  const listOnlineStatement = db.prepare(`${playerSelect} WHERE ps.id IS NOT NULL AND ps.disconnected_at IS NULL GROUP BY p.id ORDER BY ps.connected_at ASC`);
 
   const upsertPlayerTransaction = db.transaction((player) => {
     const provider = String(player.provider || '').trim().toLowerCase();
