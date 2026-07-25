@@ -22,13 +22,12 @@ export class SevenDaysToDiePlayerProvider extends BasePlayerProvider {
 
   async getOnlinePlayers(server) {
     const status = await queryServerStatus(server, true);
-    if (!status?.online) return { online: false, players: [], status };
+    if (!status?.online) return { online: false, complete: true, players: [], status };
 
     const players = (Array.isArray(status.players) ? status.players : [])
       .map((player) => {
         const displayName = normaliseName(player?.name);
         if (!displayName) return null;
-
         return {
           provider: player.steamId ? 'steam' : this.providerName,
           providerId: player.steamId || fallbackProviderId(server.id, displayName),
@@ -38,6 +37,8 @@ export class SevenDaysToDiePlayerProvider extends BasePlayerProvider {
       })
       .filter(Boolean);
 
-    return { online: true, players, status };
+    const reportedCount = Number(status.playersCurrent || 0);
+    const complete = reportedCount === 0 || players.length >= reportedCount;
+    return { online: true, complete, players, status };
   }
 }
