@@ -4,8 +4,10 @@ import { fileURLToPath } from 'node:url';
 import Database from 'better-sqlite3';
 import express from 'express';
 import { createIdentityService } from './identity/identityService.js';
+import { startPlayerPoller } from './identity/playerPoller.js';
 import { registerIdentityRoutes } from './identity/routes.js';
 import { initialiseIdentitySchema } from './identity/schema.js';
+import { createSessionTracker } from './identity/sessionTracker.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -24,9 +26,7 @@ express.application.init = function patchedInit(...args) {
 await import('./index.js');
 express.application.init = originalInit;
 
-if (!application) {
-  throw new Error('Unable to initialise the ApexOrder Express application.');
-}
+if (!application) throw new Error('Unable to initialise the ApexOrder Express application.');
 
 fs.mkdirSync(dataDir, { recursive: true });
 const identityDb = new Database(databasePath);
@@ -36,6 +36,8 @@ identityDb.pragma('busy_timeout = 5000');
 
 initialiseIdentitySchema(identityDb);
 const identityService = createIdentityService(identityDb);
+const sessionTracker = createSessionTracker(identityDb, identityService);
 registerIdentityRoutes(application, identityService);
+startPlayerPoller(identityDb, sessionTracker);
 
 console.log('Player identity API: enabled');
