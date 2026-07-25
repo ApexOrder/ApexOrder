@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Users, Map, Cpu, Copy, Check, MemoryStick, Clock3, Gamepad2, ExternalLink, Radio, Gauge, UserRound, Timer, Trophy, Wifi } from 'lucide-react';
+import { X, Users, Map, Cpu, Copy, Check, MemoryStick, Clock3, Gamepad2, ExternalLink, Radio, Gauge, Wifi } from 'lucide-react';
 import CapacityBar from '@/components/ui/CapacityBar';
 import StatusBadge from '@/components/ui/StatusBadge';
 import MarkdownContent from '@/components/ui/MarkdownContent';
@@ -22,24 +22,6 @@ function formatUptime(seconds) {
   if (days) return `${days}d ${hours}h`;
   if (hours) return `${hours}h ${minutes}m`;
   return `${minutes}m`;
-}
-
-function formatSessionTime(seconds) {
-  const value = Number(seconds);
-  if (!Number.isFinite(value) || value < 0) return null;
-  const hours = Math.floor(value / 3600);
-  const minutes = Math.floor((value % 3600) / 60);
-  const secs = Math.floor(value % 60);
-  if (hours) return `${hours}h ${minutes}m`;
-  if (minutes) return `${minutes}m ${secs}s`;
-  return `${secs}s`;
-}
-
-function elapsedSince(value) {
-  if (!value) return null;
-  const started = new Date(value).getTime();
-  if (!Number.isFinite(started)) return null;
-  return formatSessionTime(Math.max(0, (Date.now() - started) / 1000));
 }
 
 function parseMods(value) {
@@ -76,50 +58,13 @@ function Metric({ icon: Icon, label, value, accent = '#10FF8B' }) {
 
 export default function ServerProfileModal({ server, onClose }) {
   const [copied, setCopied] = useState(false);
-  const [trackedPlayers, setTrackedPlayers] = useState([]);
-  const [playersLoading, setPlayersLoading] = useState(true);
   const live = server.live;
   const mods = parseMods(server.mods);
   const joinUrl = getJoinUrl(server);
   const fetchedAt = live?.fetchedAt ? new Date(live.fetchedAt) : null;
-  const queryPlayers = Array.isArray(live?.players) ? live.players : [];
   const bannerOffset = getBannerOffset(server.bannerPosition);
-
-  useEffect(() => {
-    let cancelled = false;
-    const controller = new AbortController();
-
-    async function loadTrackedPlayers() {
-      setPlayersLoading(true);
-      try {
-        const response = await fetch(`/api/players/online?serverId=${encodeURIComponent(server.id)}`, { signal: controller.signal });
-        if (!response.ok) throw new Error(`Player API returned ${response.status}`);
-        const payload = await response.json();
-        if (!cancelled) setTrackedPlayers(Array.isArray(payload.items) ? payload.items : []);
-      } catch (error) {
-        if (!cancelled && error.name !== 'AbortError') setTrackedPlayers([]);
-      } finally {
-        if (!cancelled) setPlayersLoading(false);
-      }
-    }
-
-    void loadTrackedPlayers();
-    const timer = setInterval(loadTrackedPlayers, 30000);
-    return () => {
-      cancelled = true;
-      controller.abort();
-      clearInterval(timer);
-    };
-  }, [server.id]);
-
-  const players = trackedPlayers.length > 0
-    ? trackedPlayers.map((player) => ({
-        ...player,
-        name: player.displayName,
-        time: elapsedSince(player.connectedSince),
-        tracked: true,
-      }))
-    : queryPlayers;
+  const currentPlayers = Number(server.players?.current ?? live?.playersCurrent ?? 0);
+  const maxPlayers = Number(server.players?.max ?? live?.playersMax ?? 32);
 
   const handleCopy = async () => {
     if (!server.ip) return;
@@ -156,7 +101,7 @@ export default function ServerProfileModal({ server, onClose }) {
             <MarkdownContent className="mb-5 text-sm text-white/55">{server.description}</MarkdownContent>
 
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-5">
-              <Metric icon={Users} label="PLAYERS" value={`${server.players?.current ?? 0}/${server.players?.max ?? 32}`} />
+              <Metric icon={Users} label="PLAYERS ONLINE" value={`${currentPlayers}/${maxPlayers}`} />
               <Metric icon={Map} label="MAP" value={server.map || 'Unknown'} accent="#D4AF37" />
               <Metric icon={Gauge} label="STATE" value={live?.state || server.status} accent="#7DD3FC" />
               {live?.ping != null && <Metric icon={Wifi} label="PING" value={`${Math.round(live.ping)} ms`} accent="#7DD3FC" />}
@@ -166,47 +111,7 @@ export default function ServerProfileModal({ server, onClose }) {
               {server.showPerformance && <Metric icon={Clock3} label="UPTIME" value={formatUptime(live?.uptimeSeconds)} accent="#7DD3FC" />}
             </div>
 
-            <CapacityBar current={server.players?.current ?? 0} max={server.players?.max ?? 32} label="SERVER CAPACITY" />
-
-            {live?.available && (
-              <div className="mt-5">
-                <div className="mb-2 flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-1.5"><Users size={13} className="text-emerald-glow" /><span className="text-xs font-mono tracking-wider text-emerald-glow">ONLINE PLAYERS</span></div>
-                  <span className="text-[10px] font-mono text-muted-foreground">{trackedPlayers.length || server.players?.current || players.length} CONNECTED</span>
-                </div>
-                {playersLoading && players.length === 0 ? (
-                  <div className="rounded-lg border border-white/8 bg-white/[0.02] px-3 py-4 text-center text-xs font-mono text-muted-foreground">Loading tracked players…</div>
-                ) : players.length > 0 ? (
-                  <div className="space-y-2">
-                    {players.map((player, playerIndex) => {
-                      const sessionTime = player.tracked ? player.time : formatSessionTime(player.time);
-                      const content = (
-                        <>
-                          <div className="flex min-w-0 items-center gap-2.5">
-                            <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-glow shadow-[0_0_8px_rgba(16,255,139,0.8)]" />
-                            {player.avatarUrl ? <img src={player.avatarUrl} alt="" className="h-7 w-7 rounded object-cover" /> : <UserRound size={15} className="shrink-0 text-emerald-glow" />}
-                            <div className="min-w-0">
-                              <div className="truncate text-sm font-semibold text-foreground">{player.name}</div>
-                              {player.tracked && <div className="text-[9px] font-mono uppercase tracking-wider text-muted-foreground">{player.provider === 'steam' ? 'Steam player' : 'Tracked player'}</div>}
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-3 text-[10px] font-mono text-muted-foreground">
-                            {sessionTime && <span className="flex items-center gap-1"><Timer size={11} /> {sessionTime}</span>}
-                            {player.score != null && <span className="flex items-center gap-1"><Trophy size={11} /> {player.score}</span>}
-                            {player.profileUrl && <ExternalLink size={12} />}
-                          </div>
-                        </>
-                      );
-                      const className = "flex flex-wrap items-center justify-between gap-3 rounded-lg px-3 py-2.5";
-                      const style = { background: 'rgba(16,255,139,0.035)', border: '1px solid rgba(16,255,139,0.12)' };
-                      return player.profileUrl ? <a key={player.id || `${player.name}-${playerIndex}`} href={player.profileUrl} target="_blank" rel="noopener noreferrer" className={className} style={style}>{content}</a> : <div key={player.id || `${player.name}-${playerIndex}`} className={className} style={style}>{content}</div>;
-                    })}
-                  </div>
-                ) : (
-                  <div className="rounded-lg border border-white/8 bg-white/[0.02] px-3 py-4 text-center text-xs font-mono text-muted-foreground">{(server.players?.current ?? 0) > 0 ? 'Player identities have not been captured yet.' : 'No players are currently online.'}</div>
-                )}
-              </div>
-            )}
+            <CapacityBar current={currentPlayers} max={maxPlayers} label="SERVER CAPACITY" />
 
             {mods.length > 0 && (
               <div className="mt-5">
