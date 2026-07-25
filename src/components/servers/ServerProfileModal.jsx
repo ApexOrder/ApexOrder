@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Users, Map, Cpu, Copy, Check, MemoryStick, Clock3, Gamepad2, ExternalLink, Radio, Gauge, UserRound, Timer, Trophy, Wifi } from 'lucide-react';
 import CapacityBar from '@/components/ui/CapacityBar';
@@ -35,6 +35,13 @@ function formatSessionTime(seconds) {
   return `${secs}s`;
 }
 
+function elapsedSince(value) {
+  if (!value) return null;
+  const started = new Date(value).getTime();
+  if (!Number.isFinite(started)) return null;
+  return formatSessionTime(Math.max(0, (Date.now() - started) / 1000));
+}
+
 function parseMods(value) {
   const list = Array.isArray(value) ? value : String(value || '').split(',').map((item) => item.trim()).filter(Boolean);
   return list.map((entry) => {
@@ -51,13 +58,7 @@ function getJoinUrl(server) {
 }
 
 function getBannerOffset(position) {
-  const offsets = {
-    top: 0,
-    upper: 18,
-    center: 36,
-    lower: 54,
-    bottom: 72,
-  };
+  const offsets = { top: 0, upper: 18, center: 36, lower: 54, bottom: 72 };
   return offsets[position] ?? offsets.center;
 }
 
@@ -75,12 +76,50 @@ function Metric({ icon: Icon, label, value, accent = '#10FF8B' }) {
 
 export default function ServerProfileModal({ server, onClose }) {
   const [copied, setCopied] = useState(false);
+  const [trackedPlayers, setTrackedPlayers] = useState([]);
+  const [playersLoading, setPlayersLoading] = useState(true);
   const live = server.live;
   const mods = parseMods(server.mods);
   const joinUrl = getJoinUrl(server);
   const fetchedAt = live?.fetchedAt ? new Date(live.fetchedAt) : null;
-  const players = Array.isArray(live?.players) ? live.players : [];
+  const queryPlayers = Array.isArray(live?.players) ? live.players : [];
   const bannerOffset = getBannerOffset(server.bannerPosition);
+
+  useEffect(() => {
+    let cancelled = false;
+    const controller = new AbortController();
+
+    async function loadTrackedPlayers() {
+      setPlayersLoading(true);
+      try {
+        const response = await fetch(`/api/players/online?serverId=${encodeURIComponent(server.id)}`, { signal: controller.signal });
+        if (!response.ok) throw new Error(`Player API returned ${response.status}`);
+        const payload = await response.json();
+        if (!cancelled) setTrackedPlayers(Array.isArray(payload.items) ? payload.items : []);
+      } catch (error) {
+        if (!cancelled && error.name !== 'AbortError') setTrackedPlayers([]);
+      } finally {
+        if (!cancelled) setPlayersLoading(false);
+      }
+    }
+
+    void loadTrackedPlayers();
+    const timer = setInterval(loadTrackedPlayers, 30000);
+    return () => {
+      cancelled = true;
+      controller.abort();
+      clearInterval(timer);
+    };
+  }, [server.id]);
+
+  const players = trackedPlayers.length > 0
+    ? trackedPlayers.map((player) => ({
+        ...player,
+        name: player.displayName,
+        time: elapsedSince(player.connectedSince),
+        tracked: true,
+      }))
+    : queryPlayers;
 
   const handleCopy = async () => {
     if (!server.ip) return;
@@ -93,24 +132,9 @@ export default function ServerProfileModal({ server, onClose }) {
     <AnimatePresence>
       <motion.div className="fixed inset-0 z-50 flex items-center justify-center p-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
         <div className="absolute inset-0 bg-black/75 backdrop-blur-sm" onClick={onClose} />
-
-        <motion.div
-          className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto z-10 rounded-xl"
-          initial={{ opacity: 0, scale: 0.92, y: 20 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.92, y: 20 }}
-          transition={{ type: 'spring', damping: 22, stiffness: 280 }}
-          style={{ background: 'rgba(6,14,6,0.99)', border: '1px solid rgba(16,255,139,0.2)' }}
-        >
+        <motion.div className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto z-10 rounded-xl" initial={{ opacity: 0, scale: 0.92, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.92, y: 20 }} transition={{ type: 'spring', damping: 22, stiffness: 280 }} style={{ background: 'rgba(6,14,6,0.99)', border: '1px solid rgba(16,255,139,0.2)' }}>
           <div className="relative h-52 overflow-hidden bg-black">
-            {server.image ? (
-              <img
-                src={server.image}
-                alt={server.name}
-                className="absolute inset-x-0 top-0 h-auto min-h-full w-full max-w-none opacity-90"
-                style={{ transform: `translateY(${bannerOffset}px)` }}
-              />
-            ) : <div className="w-full h-full" style={{ background: 'linear-gradient(135deg, #0a1a0a, #050a05)' }} />}
+            {server.image ? <img src={server.image} alt={server.name} className="absolute inset-x-0 top-0 h-auto min-h-full w-full max-w-none opacity-90" style={{ transform: `translateY(${bannerOffset}px)` }} /> : <div className="w-full h-full" style={{ background: 'linear-gradient(135deg, #0a1a0a, #050a05)' }} />}
             <div className="absolute inset-0" style={{ background: 'linear-gradient(to top, rgba(6,14,6,1) 0%, rgba(6,14,6,0.25) 65%, transparent 100%)' }} />
             <div className="absolute top-4 left-4 flex gap-2">
               <span className="px-2 py-1 text-xs font-mono font-bold rounded" style={{ background: 'rgba(5,10,5,0.8)', border: '1px solid rgba(212,175,55,0.4)', color: '#D4AF37' }}>{server.tag}</span>
@@ -148,31 +172,38 @@ export default function ServerProfileModal({ server, onClose }) {
               <div className="mt-5">
                 <div className="mb-2 flex items-center justify-between gap-3">
                   <div className="flex items-center gap-1.5"><Users size={13} className="text-emerald-glow" /><span className="text-xs font-mono tracking-wider text-emerald-glow">ONLINE PLAYERS</span></div>
-                  <span className="text-[10px] font-mono text-muted-foreground">{server.players?.current ?? players.length} CONNECTED</span>
+                  <span className="text-[10px] font-mono text-muted-foreground">{trackedPlayers.length || server.players?.current || players.length} CONNECTED</span>
                 </div>
-                {players.length > 0 ? (
+                {playersLoading && players.length === 0 ? (
+                  <div className="rounded-lg border border-white/8 bg-white/[0.02] px-3 py-4 text-center text-xs font-mono text-muted-foreground">Loading tracked players…</div>
+                ) : players.length > 0 ? (
                   <div className="space-y-2">
                     {players.map((player, playerIndex) => {
-                      const sessionTime = formatSessionTime(player.time);
-                      return (
-                        <div key={`${player.name}-${playerIndex}`} className="flex flex-wrap items-center justify-between gap-3 rounded-lg px-3 py-2.5" style={{ background: 'rgba(16,255,139,0.035)', border: '1px solid rgba(16,255,139,0.12)' }}>
+                      const sessionTime = player.tracked ? player.time : formatSessionTime(player.time);
+                      const content = (
+                        <>
                           <div className="flex min-w-0 items-center gap-2.5">
                             <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-glow shadow-[0_0_8px_rgba(16,255,139,0.8)]" />
-                            <UserRound size={15} className="shrink-0 text-emerald-glow" />
-                            <span className="truncate text-sm font-semibold text-foreground">{player.name}</span>
+                            {player.avatarUrl ? <img src={player.avatarUrl} alt="" className="h-7 w-7 rounded object-cover" /> : <UserRound size={15} className="shrink-0 text-emerald-glow" />}
+                            <div className="min-w-0">
+                              <div className="truncate text-sm font-semibold text-foreground">{player.name}</div>
+                              {player.tracked && <div className="text-[9px] font-mono uppercase tracking-wider text-muted-foreground">{player.provider === 'steam' ? 'Steam player' : 'Tracked player'}</div>}
+                            </div>
                           </div>
                           <div className="flex items-center gap-3 text-[10px] font-mono text-muted-foreground">
                             {sessionTime && <span className="flex items-center gap-1"><Timer size={11} /> {sessionTime}</span>}
                             {player.score != null && <span className="flex items-center gap-1"><Trophy size={11} /> {player.score}</span>}
+                            {player.profileUrl && <ExternalLink size={12} />}
                           </div>
-                        </div>
+                        </>
                       );
+                      const className = "flex flex-wrap items-center justify-between gap-3 rounded-lg px-3 py-2.5";
+                      const style = { background: 'rgba(16,255,139,0.035)', border: '1px solid rgba(16,255,139,0.12)' };
+                      return player.profileUrl ? <a key={player.id || `${player.name}-${playerIndex}`} href={player.profileUrl} target="_blank" rel="noopener noreferrer" className={className} style={style}>{content}</a> : <div key={player.id || `${player.name}-${playerIndex}`} className={className} style={style}>{content}</div>;
                     })}
                   </div>
                 ) : (
-                  <div className="rounded-lg border border-white/8 bg-white/[0.02] px-3 py-4 text-center text-xs font-mono text-muted-foreground">
-                    {(server.players?.current ?? 0) > 0 ? 'Player names are not exposed by this server query.' : 'No players are currently online.'}
-                  </div>
+                  <div className="rounded-lg border border-white/8 bg-white/[0.02] px-3 py-4 text-center text-xs font-mono text-muted-foreground">{(server.players?.current ?? 0) > 0 ? 'Player identities have not been captured yet.' : 'No players are currently online.'}</div>
                 )}
               </div>
             )}
@@ -181,28 +212,12 @@ export default function ServerProfileModal({ server, onClose }) {
               <div className="mt-5">
                 <div className="flex items-center gap-1.5 mb-3"><Gamepad2 size={13} className="text-gold" /><span className="text-xs font-mono tracking-wider text-gold">FEATURED MODS / PLUGINS</span></div>
                 <div className="space-y-2">
-                  {mods.map((mod) => (
-                    <div key={`${mod.name}-${mod.url}`} className="rounded-lg p-3" style={{ background: 'rgba(212,175,55,0.035)', border: '1px solid rgba(212,175,55,0.16)' }}>
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="font-semibold text-foreground">{mod.name}</div>
-                          {mod.description && <MarkdownContent className="mt-1 text-xs text-muted-foreground">{mod.description}</MarkdownContent>}
-                        </div>
-                        {mod.url && <a href={mod.url} target="_blank" rel="noopener noreferrer" className="shrink-0 text-gold hover:text-foreground" aria-label={`Open ${mod.name}`}><ExternalLink size={15} /></a>}
-                      </div>
-                    </div>
-                  ))}
+                  {mods.map((mod) => <div key={`${mod.name}-${mod.url}`} className="rounded-lg p-3" style={{ background: 'rgba(212,175,55,0.035)', border: '1px solid rgba(212,175,55,0.16)' }}><div className="flex items-start justify-between gap-3"><div className="min-w-0"><div className="font-semibold text-foreground">{mod.name}</div>{mod.description && <MarkdownContent className="mt-1 text-xs text-muted-foreground">{mod.description}</MarkdownContent>}</div>{mod.url && <a href={mod.url} target="_blank" rel="noopener noreferrer" className="shrink-0 text-gold hover:text-foreground" aria-label={`Open ${mod.name}`}><ExternalLink size={15} /></a>}</div></div>)}
                 </div>
               </div>
             )}
 
-            {(server.ip || server.joinInstructions) && (
-              <div className="mt-5 p-4 rounded-lg" style={{ background: 'rgba(16,255,139,0.04)', border: '1px solid rgba(16,255,139,0.12)' }}>
-                <div className="text-xs font-mono tracking-wider mb-3" style={{ color: 'rgba(16,255,139,0.55)' }}>CONNECT</div>
-                <MarkdownContent className="mb-3 text-sm text-white/55">{server.joinInstructions}</MarkdownContent>
-                {server.ip && <button onClick={handleCopy} className="w-full flex items-center justify-between px-3 py-2.5 rounded" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(16,255,139,0.2)' }}><span className="font-mono text-sm" style={{ color: '#10FF8B' }}>{server.ip}</span>{copied ? <Check size={14} style={{ color: '#10FF8B' }} /> : <Copy size={14} style={{ color: 'rgba(255,255,255,0.4)' }} />}</button>}
-              </div>
-            )}
+            {(server.ip || server.joinInstructions) && <div className="mt-5 p-4 rounded-lg" style={{ background: 'rgba(16,255,139,0.04)', border: '1px solid rgba(16,255,139,0.12)' }}><div className="text-xs font-mono tracking-wider mb-3" style={{ color: 'rgba(16,255,139,0.55)' }}>CONNECT</div><MarkdownContent className="mb-3 text-sm text-white/55">{server.joinInstructions}</MarkdownContent>{server.ip && <button onClick={handleCopy} className="w-full flex items-center justify-between px-3 py-2.5 rounded" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(16,255,139,0.2)' }}><span className="font-mono text-sm" style={{ color: '#10FF8B' }}>{server.ip}</span>{copied ? <Check size={14} style={{ color: '#10FF8B' }} /> : <Copy size={14} style={{ color: 'rgba(255,255,255,0.4)' }} />}</button>}</div>}
 
             <div className="mt-5 grid grid-cols-1 sm:grid-cols-3 gap-2">
               {joinUrl && <a href={joinUrl} className="flex items-center justify-center gap-2 rounded px-4 py-3 text-xs font-bold tracking-wider bg-emerald-glow text-obsidian">JOIN SERVER <ExternalLink size={13} /></a>}
