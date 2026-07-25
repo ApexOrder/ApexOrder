@@ -6,8 +6,8 @@ export function registerIdentityRoutes(app, identityService) {
     }));
   });
 
-  app.get('/api/players/online', (_request, response) => {
-    const items = identityService.listOnlinePlayers();
+  app.get('/api/players/online', (request, response) => {
+    const items = identityService.listOnlinePlayers({ serverId: request.query.serverId });
     response.json({ items, total: items.length });
   });
 
