@@ -1,3 +1,5 @@
+import crypto from 'node:crypto';
+
 export function createSessionTracker(db, identityService) {
   const getOpenSessions = db.prepare(`
     SELECT id, player_id, server_id, connected_at
@@ -31,12 +33,7 @@ export function createSessionTracker(db, identityService) {
 
     for (const playerId of onlinePlayerIds) {
       if (openPlayerIds.has(playerId)) continue;
-      insertSession.run({
-        id: crypto.randomUUID(),
-        playerId,
-        serverId,
-        now: observedAt,
-      });
+      insertSession.run({ id: crypto.randomUUID(), playerId, serverId, now: observedAt });
     }
 
     for (const session of openSessions) {
