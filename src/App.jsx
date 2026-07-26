@@ -16,6 +16,8 @@ import Projects from './pages/Projects';
 import StoreWithMemberLogin from './pages/StoreWithMemberLogin';
 import Events from './pages/Events';
 import Stats from './pages/Stats';
+import Players from './pages/Players.jsx';
+import PlayerProfile from './pages/PlayerProfile.jsx';
 import Admin from './pages/Admin';
 import Changelog from './pages/Changelog.jsx';
 import News from './pages/News.jsx';
@@ -38,6 +40,8 @@ function AppRoutes() {
         <Route path="/store" element={<StoreWithMemberLogin />} />
         <Route path="/events" element={<Events />} />
         <Route path="/stats" element={<Stats />} />
+        <Route path="/players" element={<Players />} />
+        <Route path="/players/:id" element={<PlayerProfile />} />
         <Route path="/changelog" element={<Changelog />} />
         <Route path="/news" element={<News />} />
         <Route path="/ban-appeal" element={<BanAppeal />} />
