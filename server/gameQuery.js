@@ -1,8 +1,13 @@
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { GameDig } from 'gamedig';
 
+const execFileAsync = promisify(execFile);
 const cache = new Map();
 const cacheTtlMs = Math.max(5000, Number(process.env.GAME_QUERY_CACHE_MS || 15000));
 const queryTimeoutMs = Math.max(1000, Number(process.env.GAME_QUERY_TIMEOUT_MS || 5000));
+const rconTimeoutMs = Math.max(1000, Number(process.env.RCON_QUERY_TIMEOUT_MS || 5000));
+const berconCliPath = String(process.env.BERCON_CLI_PATH || 'bercon-cli').trim();
 const loggedPlayerShapes = new Set();
 
 const supportedQueryTypes = new Set([
@@ -38,6 +43,12 @@ const steamIdKeys = [
 function numberOrNull(value) {
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
+}
+
+function booleanValue(value, fallback = false) {
+  if (typeof value === 'boolean') return value;
+  if (value === undefined || value === null || value === '') return fallback;
+  return ['1', 'true', 'yes', 'on'].includes(String(value).trim().toLowerCase());
 }
 
 function validSteamId(value) {
@@ -106,14 +117,95 @@ function normalisePlayers(players, queryType) {
     .filter((player) => player.name);
 }
 
+function normaliseRconPlayers(players) {
+  if (!Array.isArray(players)) return [];
+
+  return players
+    .map((player) => ({
+      guid: String(player?.guid || '').trim() || null,
+      steamId: null,
+      name: String(player?.name || '').trim(),
+      ip: String(player?.ip || '').trim() || null,
+      port: numberOrNull(player?.port),
+      ping: numberOrNull(player?.ping),
+      slot: numberOrNull(player?.id),
+      valid: Boolean(player?.valid),
+      lobby: Boolean(player?.lobby),
+      score: null,
+      time: null,
+    }))
+    .filter((player) => player.name && player.guid);
+}
+
 function queryTypeFor(server) {
   const requested = String(server?.query_type || 'protocol-valve').trim().toLowerCase();
   return supportedQueryTypes.has(requested) ? requested : 'protocol-valve';
 }
 
+function rconSettingsFor(server) {
+  const host = String(server?.rcon_host || process.env.DAYZ_RCON_HOST || '').trim();
+  const port = Number(server?.rcon_port || process.env.DAYZ_RCON_PORT || 2306);
+  const password = String(process.env.DAYZ_RCON_PASSWORD || process.env.RCON_PASSWORD || '').trim();
+  const explicitlyEnabled = server?.rcon_enabled !== undefined
+    ? booleanValue(server.rcon_enabled)
+    : booleanValue(process.env.DAYZ_RCON_ENABLED, Boolean(host && password));
+
+  return {
+    enabled: queryTypeFor(server) === 'dayz' && explicitlyEnabled,
+    host,
+    port,
+    password,
+  };
+}
+
 function cacheKey(server) {
   const type = queryTypeFor(server);
-  return `${server.id}:${type}:${server.query_host || '127.0.0.1'}:${Number(server.query_port || 26903)}`;
+  const rcon = rconSettingsFor(server);
+  return [
+    server.id,
+    type,
+    server.query_host || '127.0.0.1',
+    Number(server.query_port || 26903),
+    rcon.enabled ? rcon.host : '',
+    rcon.enabled ? rcon.port : '',
+  ].join(':');
+}
+
+async function queryRconPlayers(server) {
+  const settings = rconSettingsFor(server);
+  if (!settings.enabled) return null;
+  if (!settings.host) throw new Error('DayZ RCon host is required.');
+  if (!Number.isInteger(settings.port) || settings.port < 1 || settings.port > 65535) {
+    throw new Error('DayZ RCon port must be between 1 and 65535.');
+  }
+  if (!settings.password) throw new Error('DAYZ_RCON_PASSWORD or RCON_PASSWORD is required.');
+
+  const { stdout } = await execFileAsync(berconCliPath, [
+    '--ip', settings.host,
+    '--port', String(settings.port),
+    '--password', settings.password,
+    '--timeout', String(Math.max(1, Math.ceil(rconTimeoutMs / 1000))),
+    '--format=json',
+    'players',
+  ], {
+    timeout: rconTimeoutMs + 1000,
+    windowsHide: true,
+    maxBuffer: 1024 * 1024,
+  });
+
+  let payload;
+  try {
+    payload = JSON.parse(stdout);
+  } catch {
+    throw new Error('BERCon returned invalid JSON.');
+  }
+
+  return {
+    source: 'bercon',
+    host: settings.host,
+    port: settings.port,
+    players: normaliseRconPlayers(payload),
+  };
 }
 
 export function clearGameQueryCache(serverId) {
@@ -143,10 +235,26 @@ export async function queryServerStatus(server, force = false) {
       maxAttempts: 1,
     });
 
-    const players = normalisePlayers(result.players, type);
+    let players = normalisePlayers(result.players, type);
+    let playerSource = 'gamedig';
+    let rcon = null;
+    let rconError = null;
+
+    if (type === 'dayz' && rconSettingsFor(server).enabled) {
+      try {
+        rcon = await queryRconPlayers(server);
+        players = rcon.players;
+        playerSource = 'bercon';
+      } catch (error) {
+        rconError = error?.message || 'RCon player query failed.';
+        console.warn(`[RCon] Unable to query players for server ${server.id}:`, rconError);
+      }
+    }
+
     const value = {
       serverId: server.id,
-      source: 'gamedig',
+      source: playerSource === 'bercon' ? 'gamedig+bercon' : 'gamedig',
+      playerSource,
       queryType: type,
       available: true,
       online: true,
@@ -154,12 +262,15 @@ export async function queryServerStatus(server, force = false) {
       name: result.name || null,
       map: result.map || null,
       version: result.version || null,
-      playersCurrent: numberOrNull(result.numplayers) ?? players.length,
+      playersCurrent: playerSource === 'bercon'
+        ? players.length
+        : numberOrNull(result.numplayers) ?? players.length,
       playersMax: numberOrNull(result.maxplayers),
       ping: numberOrNull(result.ping),
       password: Boolean(result.password),
       queryHost: host,
       queryPort: numberOrNull(result.queryPort) ?? port,
+      rcon: rcon ? { available: true, host: rcon.host, port: rcon.port } : { available: false, error: rconError },
       players,
       fetchedAt: new Date().toISOString(),
     };
@@ -170,6 +281,7 @@ export async function queryServerStatus(server, force = false) {
     const value = {
       serverId: server.id,
       source: 'gamedig',
+      playerSource: null,
       queryType: type,
       available: false,
       online: false,
