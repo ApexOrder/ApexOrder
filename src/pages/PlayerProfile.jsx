@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, Clock3, Radio, ShieldCheck, UserRound } from 'lucide-react';
+import { base44 } from '@/api/base44Client';
 
 function formatDuration(seconds) {
   const value = Number(seconds || 0);
@@ -19,16 +20,23 @@ export default function PlayerProfile() {
   const { id } = useParams();
   const [player, setPlayer] = useState(null);
   const [sessions, setSessions] = useState([]);
+  const [servers, setServers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  const serverNames = useMemo(
+    () => new Map(servers.map((server) => [server.id, server.name])),
+    [servers],
+  );
 
   useEffect(() => {
     let active = true;
     async function load() {
       try {
-        const [playerResponse, sessionsResponse] = await Promise.all([
+        const [playerResponse, sessionsResponse, serverPayload] = await Promise.all([
           fetch(`/api/players/${encodeURIComponent(id)}`),
           fetch(`/api/players/${encodeURIComponent(id)}/sessions?limit=50`),
+          base44.entities.Server.list('sort_order').catch(() => []),
         ]);
         if (!playerResponse.ok) throw new Error(playerResponse.status === 404 ? 'Player profile not found.' : `Player API returned ${playerResponse.status}`);
         if (!sessionsResponse.ok) throw new Error(`Session API returned ${sessionsResponse.status}`);
@@ -37,6 +45,7 @@ export default function PlayerProfile() {
         if (active) {
           setPlayer(playerPayload);
           setSessions(Array.isArray(sessionPayload.items) ? sessionPayload.items : []);
+          setServers(Array.isArray(serverPayload) ? serverPayload : []);
         }
       } catch (loadError) {
         if (active) setError(loadError.message || 'Unable to load this player profile.');
@@ -86,13 +95,16 @@ export default function PlayerProfile() {
           <p className="mt-1 text-xs text-white/35">Latest captured activity across ApexOrder servers.</p>
         </div>
         <div className="space-y-2">
-          {sessions.map((session) => (
-            <div key={session.id} className="grid gap-3 rounded-xl border border-white/6 bg-white/[0.02] px-4 py-3 sm:grid-cols-[1fr_auto_auto] sm:items-center">
-              <div><div className="text-sm font-bold text-white">Server {session.serverId}</div><div className="text-[10px] font-mono text-white/30">Connected {formatDate(session.connectedAt)}</div></div>
-              <div className="text-xs text-white/45">{session.disconnectedAt ? `Left ${formatDate(session.disconnectedAt)}` : 'Currently online'}</div>
-              <div className="text-sm font-black text-emerald-glow">{session.durationSeconds == null ? 'Live' : formatDuration(session.durationSeconds)}</div>
-            </div>
-          ))}
+          {sessions.map((session) => {
+            const serverName = serverNames.get(session.serverId) || 'Unknown ApexOrder server';
+            return (
+              <div key={session.id} className="grid gap-3 rounded-xl border border-white/6 bg-white/[0.02] px-4 py-3 sm:grid-cols-[1fr_auto_auto] sm:items-center">
+                <div><div className="text-sm font-bold text-white">{serverName}</div><div className="text-[10px] font-mono text-white/30">Connected {formatDate(session.connectedAt)}</div></div>
+                <div className="text-xs text-white/45">{session.disconnectedAt ? `Left ${formatDate(session.disconnectedAt)}` : 'Currently online'}</div>
+                <div className="text-sm font-black text-emerald-glow">{session.durationSeconds == null ? 'Live' : formatDuration(session.durationSeconds)}</div>
+              </div>
+            );
+          })}
           {sessions.length === 0 && <div className="py-10 text-center text-sm text-white/35">No sessions captured yet.</div>}
         </div>
       </section>
