@@ -145,7 +145,12 @@ function queryTypeFor(server) {
 function rconSettingsFor(server) {
   const host = String(server?.rcon_host || process.env.DAYZ_RCON_HOST || '').trim();
   const port = Number(server?.rcon_port || process.env.DAYZ_RCON_PORT || 2306);
-  const password = String(process.env.DAYZ_RCON_PASSWORD || process.env.RCON_PASSWORD || '').trim();
+  const password = String(
+    server?.rcon_password
+      || process.env.DAYZ_RCON_PASSWORD
+      || process.env.RCON_PASSWORD
+      || '',
+  ).trim();
   const explicitlyEnabled = server?.rcon_enabled !== undefined
     ? booleanValue(server.rcon_enabled)
     : booleanValue(process.env.DAYZ_RCON_ENABLED, Boolean(host && password));
@@ -178,7 +183,7 @@ async function queryRconPlayers(server) {
   if (!Number.isInteger(settings.port) || settings.port < 1 || settings.port > 65535) {
     throw new Error('DayZ RCon port must be between 1 and 65535.');
   }
-  if (!settings.password) throw new Error('DAYZ_RCON_PASSWORD or RCON_PASSWORD is required.');
+  if (!settings.password) throw new Error('BattlEye RCon password is required.');
 
   const { stdout } = await execFileAsync(berconCliPath, [
     '--ip', settings.host,
