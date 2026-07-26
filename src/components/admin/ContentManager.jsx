@@ -33,6 +33,8 @@ const SECTIONS = {
       ['join_instructions', 'Joining Instructions', 'textarea'],
       ['query_type', 'Query Protocol / Game Type', 'select', QUERY_TYPES],
       ['query_host', 'Query Host'], ['query_port', 'Query Port', 'number'],
+      ['rcon_enabled', 'Use BattlEye RCon Players', 'boolean'],
+      ['rcon_host', 'BattlEye RCon Host'], ['rcon_port', 'BattlEye RCon Port', 'number'],
       ['live_map_url', 'Live Map URL'], ['discord_channel_url', 'Discord Channel URL'],
       ['map', 'Fallback Map'], ['version', 'Fallback Version'],
       ['players_max', 'Fallback Max Players', 'number'], ['mods', 'Mods / Plugins (comma separated)'],
@@ -156,6 +158,8 @@ export default function ContentManager() {
       next.query_type = 'protocol-valve';
       next.query_host = '127.0.0.1';
       next.query_port = 26903;
+      next.rcon_enabled = false;
+      next.rcon_port = 2306;
       next.banner_position = 'center';
     }
     setForm(next);
@@ -219,35 +223,31 @@ export default function ContentManager() {
             <div className="grid gap-4 md:grid-cols-2">
               {section.fields.map((spec) => <Field key={spec[0]} spec={spec} value={form[spec[0]]} onChange={(key, value) => setForm((current) => ({ ...current, [key]: value }))} />)}
             </div>
-            {entity === 'Server' && (
-              <div className="mt-4 rounded-lg border border-white/10 bg-black/20 p-3 text-xs text-gray-400">
-                Choose the matching GameDig type. Use <strong>protocol-valve</strong> for 7 Days to Die and most Steam/Source queries, or <strong>dayz</strong> for DayZ. For servers on another VM, use that VM's reachable LAN/NAT address rather than 127.0.0.1.
-              </div>
-            )}
-            <div className="mt-4 flex flex-wrap gap-2">
-              <button onClick={save} disabled={loading} className="flex items-center gap-2 rounded-lg border border-emerald-400/40 bg-emerald-400/10 px-4 py-2 text-xs font-bold text-emerald-300"><Save size={15} /> SAVE</button>
-              <button onClick={cancel} className="flex items-center gap-2 rounded-lg border border-white/10 px-4 py-2 text-xs font-bold text-gray-400"><X size={15} /> CANCEL</button>
+            <div className="mt-4 flex gap-2">
+              <button onClick={save} disabled={loading} className="flex items-center gap-2 rounded-lg bg-emerald-400 px-4 py-2 text-xs font-black text-black disabled:opacity-50"><Save size={15} /> SAVE</button>
+              <button onClick={cancel} className="flex items-center gap-2 rounded-lg border border-white/10 px-4 py-2 text-xs font-bold text-gray-300"><X size={15} /> CANCEL</button>
             </div>
           </div>
         )}
 
-        <div className="space-y-2">
-          {rows.map((row) => (
-            <div key={row.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-white/5 bg-white/[0.02] p-4">
-              <div className="min-w-0">
-                <div className="truncate font-bold text-white">{row[section.title] || row.title || row.name || row.id}</div>
-                <div className="mt-1 text-xs text-gray-500">{entity === 'Server' && row.query_port ? `${row.query_type || 'protocol-valve'} · ${row.query_host || '127.0.0.1'}:${row.query_port} · ` : ''}{row.status || row.category || row.game || row.email || row.discord_id || row.id}</div>
+        {loading && !editing ? <p className="py-8 text-center text-sm text-gray-500">Loading…</p> : (
+          <div className="space-y-2">
+            {rows.map((row) => (
+              <div key={row.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-white/5 bg-black/25 p-3">
+                <div><p className="font-bold text-white">{row[section.title] || row.id}</p><p className="text-xs text-gray-500">{row.status || row.category || row.game || row.id}</p></div>
+                <div className="flex items-center gap-2">
+                  {section.statusOnly ? (
+                    <select value={row.status || 'pending'} onChange={(e) => updateStatus(row, e.target.value)} className="rounded border border-white/10 bg-black px-2 py-1 text-xs text-white">
+                      <option value="pending">pending</option><option value="reviewing">reviewing</option><option value="approved">approved</option><option value="rejected">rejected</option>
+                    </select>
+                  ) : !section.readOnly && <button onClick={() => startEdit(row)} className="rounded border border-emerald-400/20 px-3 py-1.5 text-xs font-bold text-emerald-300">EDIT</button>}
+                  {!section.readOnly && <button onClick={() => remove(row.id)} className="rounded border border-red-400/20 p-2 text-red-300"><Trash2 size={14} /></button>}
+                </div>
               </div>
-              <div className="flex flex-wrap gap-2">
-                {section.statusOnly && ['pending', 'approved', 'rejected'].map((status) => <button key={status} onClick={() => updateStatus(row.id, status)} className="rounded border border-white/10 px-2 py-1 text-xs text-gray-300">{status}</button>)}
-                {!section.readOnly && !section.statusOnly && <button onClick={() => startEdit(row)} className="rounded border border-emerald-400/30 px-3 py-1.5 text-xs font-bold text-emerald-300">EDIT</button>}
-                {!section.readOnly && <button onClick={() => remove(row.id)} className="rounded border border-red-400/25 p-2 text-red-300"><Trash2 size={14} /></button>}
-              </div>
-            </div>
-          ))}
-          {!loading && !rows.length && <div className="py-10 text-center text-sm text-gray-500">No records found.</div>}
-          {loading && <div className="py-10 text-center text-sm text-emerald-300">Loading…</div>}
-        </div>
+            ))}
+            {rows.length === 0 && <p className="py-8 text-center text-sm text-gray-500">No records yet.</p>}
+          </div>
+        )}
       </div>
     </div>
   );
