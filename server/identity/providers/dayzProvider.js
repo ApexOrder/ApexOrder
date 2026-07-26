@@ -29,11 +29,17 @@ export class DayZPlayerProvider extends BasePlayerProvider {
         const displayName = normaliseName(player?.name);
         if (!displayName) return null;
 
+        const battleyeGuid = String(player?.guid || '').trim();
+        const steamId = String(player?.steamId || '').trim();
+        const provider = battleyeGuid ? 'battleye' : steamId ? 'steam' : this.providerName;
+        const providerId = battleyeGuid || steamId || fallbackProviderId(server.id, displayName);
+
         return {
-          provider: player.steamId ? 'steam' : this.providerName,
-          providerId: player.steamId || fallbackProviderId(server.id, displayName),
+          provider,
+          providerId,
+          identityId: battleyeGuid || null,
           displayName,
-          profileUrl: player.steamId ? `https://steamcommunity.com/profiles/${player.steamId}` : null,
+          profileUrl: steamId ? `https://steamcommunity.com/profiles/${steamId}` : null,
         };
       })
       .filter(Boolean);
