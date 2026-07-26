@@ -35,6 +35,7 @@ const SECTIONS = {
       ['query_host', 'Query Host'], ['query_port', 'Query Port', 'number'],
       ['rcon_enabled', 'Use BattlEye RCon Players', 'boolean'],
       ['rcon_host', 'BattlEye RCon Host'], ['rcon_port', 'BattlEye RCon Port', 'number'],
+      ['rcon_password', 'BattlEye RCon Password', 'password'],
       ['live_map_url', 'Live Map URL'], ['discord_channel_url', 'Discord Channel URL'],
       ['map', 'Fallback Map'], ['version', 'Fallback Version'],
       ['players_max', 'Fallback Max Players', 'number'], ['mods', 'Mods / Plugins (comma separated)'],
@@ -115,18 +116,23 @@ function Field({ spec, value, onChange }) {
     <label className={type === 'textarea' ? 'md:col-span-2' : ''}>
       <span className="mb-1 block text-xs font-bold uppercase tracking-wider text-emerald-300">{label}</span>
       {type === 'textarea' ? (
-        <textarea rows={5} className={common} value={value ?? ''} onChange={(e) => onChange(key, e.target.value)} />
+        <textarea rows={5} className={common} value={value ?? ''} onChange={(event) => onChange(key, event.target.value)} />
       ) : type === 'select' ? (
-        <select className={common} value={value ?? ''} onChange={(e) => onChange(key, e.target.value)}>
+        <select className={common} value={value ?? ''} onChange={(event) => onChange(key, event.target.value)}>
           {options.map((option) => <option key={option} value={option}>{option}</option>)}
         </select>
       ) : type === 'boolean' ? (
-        <select className={common} value={String(value ?? true)} onChange={(e) => onChange(key, e.target.value === 'true')}>
+        <select className={common} value={String(value ?? true)} onChange={(event) => onChange(key, event.target.value === 'true')}>
           <option value="true">Yes</option><option value="false">No</option>
         </select>
       ) : (
-        <input className={common} type={type} value={type === 'datetime-local' && value ? String(value).slice(0, 16) : value ?? ''}
-          onChange={(e) => onChange(key, type === 'number' ? Number(e.target.value) : e.target.value)} />
+        <input
+          className={common}
+          type={type}
+          autoComplete={type === 'password' ? 'new-password' : undefined}
+          value={type === 'datetime-local' && value ? String(value).slice(0, 16) : value ?? ''}
+          onChange={(event) => onChange(key, type === 'number' ? Number(event.target.value) : event.target.value)}
+        />
       )}
     </label>
   );
@@ -164,6 +170,7 @@ export default function ContentManager() {
     }
     setForm(next);
   };
+
   const startEdit = (row) => { setEditing(row.id); setForm(formForRow(section, row)); };
   const cancel = () => { setEditing(null); setForm({}); };
 
@@ -237,7 +244,7 @@ export default function ContentManager() {
                 <div><p className="font-bold text-white">{row[section.title] || row.id}</p><p className="text-xs text-gray-500">{row.status || row.category || row.game || row.id}</p></div>
                 <div className="flex items-center gap-2">
                   {section.statusOnly ? (
-                    <select value={row.status || 'pending'} onChange={(e) => updateStatus(row, e.target.value)} className="rounded border border-white/10 bg-black px-2 py-1 text-xs text-white">
+                    <select value={row.status || 'pending'} onChange={(event) => updateStatus(row, event.target.value)} className="rounded border border-white/10 bg-black px-2 py-1 text-xs text-white">
                       <option value="pending">pending</option><option value="reviewing">reviewing</option><option value="approved">approved</option><option value="rejected">rejected</option>
                     </select>
                   ) : !section.readOnly && <button onClick={() => startEdit(row)} className="rounded border border-emerald-400/20 px-3 py-1.5 text-xs font-bold text-emerald-300">EDIT</button>}
