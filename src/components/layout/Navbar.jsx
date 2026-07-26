@@ -15,6 +15,7 @@ const navLinks = [
     label: 'COMMUNITY',
     path: '/community',
     dropdown: [
+      { label: 'Players', path: '/players' },
       { label: 'Stats', path: '/stats' },
       { label: 'Rules', path: '/rules' },
       { label: 'Ban Appeal', path: '/ban-appeal' },
