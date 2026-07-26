@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Menu, X, ChevronDown } from 'lucide-react';
+import { Menu, X, ChevronDown, LogIn, LogOut, User } from 'lucide-react';
+import { useAuth } from '@/lib/AuthContext';
 
 const navLinks = [
   { label: 'HOME', path: '/' },
@@ -11,11 +12,11 @@ const navLinks = [
       { label: 'Events', path: '/events' }
     ]
   },
+  { label: 'PLAYERS', path: '/players' },
   {
     label: 'COMMUNITY',
     path: '/community',
     dropdown: [
-      { label: 'Players', path: '/players' },
       { label: 'Stats', path: '/stats' },
       { label: 'Rules', path: '/rules' },
       { label: 'Ban Appeal', path: '/ban-appeal' },
@@ -39,6 +40,7 @@ export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const location = useLocation();
   const isHome = location.pathname === '/';
+  const { member, isLoading, loginWithDiscord, logoutMember } = useAuth();
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 20);
@@ -81,7 +83,7 @@ export default function Navbar() {
               <div key={link.label} className="relative group">
                 <Link
                   to={link.path}
-                  className={`px-4 py-2 text-xs font-bold tracking-[0.15em] transition-all duration-300 flex items-center gap-1 ${
+                  className={`px-3 py-2 text-xs font-bold tracking-[0.15em] transition-all duration-300 flex items-center gap-1 ${
                     location.pathname === link.path ? 'text-emerald-glow' : 'text-gray-400 hover:text-white'
                   }`}
                   style={location.pathname === link.path ? { color: '#10FF8B', textShadow: '0 0 10px rgba(16,255,139,0.5)' } : {}}
@@ -105,15 +107,38 @@ export default function Navbar() {
           </div>
 
           <div className="hidden lg:flex items-center gap-3">
-            <div className="flex items-center gap-2 text-xs font-mono tracking-wider" style={{color:'#D4AF37'}}>
-              <span className="w-2 h-2 rounded-full animate-pulse" style={{backgroundColor:'#10FF8B', boxShadow:'0 0 6px #10FF8B'}} />
-              SINCE 2007
-            </div>
+            {!isLoading && (member ? (
+              <div className="relative group">
+                <button className="flex items-center gap-2 px-3 py-2 text-xs font-bold tracking-wider text-gray-300 hover:text-white">
+                  {member.avatar ? <img src={member.avatar} alt="" className="h-7 w-7 rounded-full" /> : <User size={16} />}
+                  <span className="max-w-28 truncate">{member.displayName}</span>
+                  <ChevronDown size={12} />
+                </button>
+                <div className="absolute top-full right-0 pt-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200">
+                  <div className="bg-black/95 backdrop-blur-xl border border-emerald-glow/20 rounded min-w-[180px] overflow-hidden">
+                    <Link to="/players" className="flex items-center gap-2 px-4 py-3 text-xs font-bold tracking-wider text-gray-400 hover:text-emerald-glow hover:bg-emerald-glow/5">
+                      <User size={14} /> Players
+                    </Link>
+                    <button onClick={logoutMember} className="w-full flex items-center gap-2 px-4 py-3 text-xs font-bold tracking-wider text-gray-400 hover:text-red-300 hover:bg-red-500/5">
+                      <LogOut size={14} /> Sign out
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={() => loginWithDiscord(location.pathname)}
+                className="flex items-center gap-2 px-4 py-2 font-bold text-xs tracking-[0.15em] rounded transition-all duration-300"
+                style={{ border: '1px solid rgba(16,255,139,0.55)', color: '#10FF8B' }}
+              >
+                <LogIn size={14} /> SIGN IN
+              </button>
+            ))}
             <a
               href="https://discord.gg/apexorder"
               target="_blank"
               rel="noopener noreferrer"
-              className="px-5 py-2 font-bold text-xs tracking-[0.2em] rounded transition-all duration-300"
+              className="px-4 py-2 font-bold text-xs tracking-[0.15em] rounded transition-all duration-300"
               style={{ border: '1px solid #10FF8B', color: '#10FF8B', boxShadow: '0 0 12px rgba(16,255,139,0.2), inset 0 0 12px rgba(16,255,139,0.05)' }}
             >
               JOIN US
@@ -141,7 +166,22 @@ export default function Navbar() {
                 )}
               </div>
             ))}
-            <div className="pt-4 border-t border-gray-800 mt-4">
+            <div className="pt-4 border-t border-gray-800 mt-4 space-y-3">
+              {!isLoading && (member ? (
+                <>
+                  <div className="flex items-center gap-3 px-4 py-2 text-sm text-gray-300">
+                    {member.avatar ? <img src={member.avatar} alt="" className="h-9 w-9 rounded-full" /> : <User size={18} />}
+                    <span className="truncate">{member.displayName}</span>
+                  </div>
+                  <button onClick={logoutMember} className="w-full flex items-center justify-center gap-2 px-5 py-3 border border-red-500/40 text-red-300 font-bold text-sm tracking-wider rounded">
+                    <LogOut size={16} /> SIGN OUT
+                  </button>
+                </>
+              ) : (
+                <button onClick={() => loginWithDiscord(location.pathname)} className="w-full flex items-center justify-center gap-2 px-5 py-3 border border-emerald-glow/50 text-emerald-glow font-bold text-sm tracking-wider rounded">
+                  <LogIn size={16} /> SIGN IN WITH DISCORD
+                </button>
+              ))}
               <a href="https://discord.gg/apexorder" target="_blank" rel="noopener noreferrer" className="block text-center px-5 py-3 border border-emerald-glow/50 text-emerald-glow font-bold text-sm tracking-wider rounded">JOIN US</a>
             </div>
           </div>
