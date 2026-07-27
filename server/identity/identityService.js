@@ -83,6 +83,21 @@ export function createIdentityService(db) {
       updated_at = @now
     WHERE id = @id
   `);
+  const promoteLegacyPlayerStatement = db.prepare(`
+    UPDATE players SET
+      identity_id = COALESCE(@identityId, identity_id),
+      provider = @provider,
+      provider_id = @providerId,
+      display_name = @displayName,
+      avatar_url = COALESCE(@avatarUrl, avatar_url),
+      profile_url = COALESCE(@profileUrl, profile_url),
+      country_code = COALESCE(@countryCode, country_code),
+      last_seen_at = @now,
+      updated_at = @now
+    WHERE id = @id
+  `);
+  const moveSessionsStatement = db.prepare('UPDATE player_sessions SET player_id = ? WHERE player_id = ?');
+  const deletePlayerStatement = db.prepare('DELETE FROM players WHERE id = ?');
   const listSessionsStatement = db.prepare(`
     SELECT id, player_id, server_id, connected_at, disconnected_at, duration_seconds
     FROM player_sessions WHERE player_id = ? ORDER BY connected_at DESC LIMIT ? OFFSET ?
@@ -97,8 +112,32 @@ export function createIdentityService(db) {
     const displayName = String(player.displayName || '').trim();
     if (!provider || !providerId || !displayName) throw new Error('provider, providerId and displayName are required.');
 
+    const legacyProvider = String(player.legacyProvider || '').trim().toLowerCase();
+    const legacyProviderId = String(player.legacyProviderId || '').trim();
     const now = player.seenAt || new Date().toISOString();
-    const existing = getPlayerByProviderStatement.get(provider, providerId);
+    let existing = getPlayerByProviderStatement.get(provider, providerId);
+    const legacy = legacyProvider && legacyProviderId
+      ? getPlayerByProviderStatement.get(legacyProvider, legacyProviderId)
+      : null;
+
+    if (!existing && legacy) {
+      promoteLegacyPlayerStatement.run({
+        id: legacy.id,
+        identityId: player.identityId || null,
+        provider,
+        providerId,
+        displayName,
+        avatarUrl: player.avatarUrl || null,
+        profileUrl: player.profileUrl || null,
+        countryCode: player.countryCode || null,
+        now,
+      });
+      existing = getPlayerByProviderStatement.get(provider, providerId);
+    } else if (existing && legacy && legacy.id !== existing.id) {
+      moveSessionsStatement.run(existing.id, legacy.id);
+      deletePlayerStatement.run(legacy.id);
+    }
+
     if (existing) {
       updatePlayerStatement.run({
         id: existing.id,
