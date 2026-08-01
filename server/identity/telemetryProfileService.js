@@ -67,7 +67,7 @@ export function createTelemetryProfileService(db) {
     getPlayerBySyntheticId(id) {
       const value = String(id || '');
       if (!value.startsWith('7dtd:')) return null;
-      return publicTelemetryPlayer(getStatement.get(value.slice(6)));
+      return publicTelemetryPlayer(getStatement.get(value.slice(5)));
     },
     enrichPlayer(player) {
       if (!player) return null;
