@@ -8,6 +8,7 @@ import { startPlayerPoller } from './identity/playerPoller.js';
 import { registerIdentityRoutes } from './identity/routes.js';
 import { initialiseIdentitySchema } from './identity/schema.js';
 import { createSessionTracker } from './identity/sessionTracker.js';
+import { createTelemetryProfileService } from './identity/telemetryProfileService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -36,8 +37,9 @@ identityDb.pragma('busy_timeout = 5000');
 
 initialiseIdentitySchema(identityDb);
 const identityService = createIdentityService(identityDb);
+const telemetryProfileService = createTelemetryProfileService(identityDb);
 const sessionTracker = createSessionTracker(identityDb, identityService);
-registerIdentityRoutes(application, identityService);
+registerIdentityRoutes(application, identityService, telemetryProfileService);
 startPlayerPoller(identityDb, sessionTracker);
 
 console.log('Player identity API: enabled');
