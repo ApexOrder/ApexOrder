@@ -20,6 +20,10 @@ function publicTelemetryPlayer(row) {
     connectedSince: null,
     games: {
       sevenDaysToDie: {
+        serverId: row.latest_server_id || null,
+        steamId64: row.provider === 'steam' ? row.player_id : null,
+        steamProfileUrl: row.provider === 'steam' ? `https://steamcommunity.com/profiles/${row.player_id}` : null,
+        currentName: row.current_name || row.player_id,
         aliases: JSON.parse(row.aliases || '[]'),
         zombieKills: Number(row.zombie_kills || 0),
         pvpKills: Number(row.pvp_kills || 0),
@@ -46,8 +50,13 @@ export function createTelemetryProfileService(db) {
     };
   }
 
-  const listStatement = db.prepare('SELECT * FROM telemetry_players ORDER BY last_seen_at DESC');
-  const getStatement = db.prepare('SELECT * FROM telemetry_players WHERE player_id = ?');
+  const eventsTableExists = Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='telemetry_events'").get());
+  const latestServerSelect = eventsTableExists
+    ? `, (SELECT te.server_id FROM telemetry_events te WHERE te.player_id = tp.player_id ORDER BY te.occurred_at DESC, te.received_at DESC LIMIT 1) AS latest_server_id`
+    : ', NULL AS latest_server_id';
+  const telemetrySelect = `SELECT tp.*${latestServerSelect} FROM telemetry_players tp`;
+  const listStatement = db.prepare(`${telemetrySelect} ORDER BY tp.last_seen_at DESC`);
+  const getStatement = db.prepare(`${telemetrySelect} WHERE tp.player_id = ?`);
 
   function getByProvider(provider, providerId) {
     const normalisedProvider = String(provider || '').toLowerCase();
