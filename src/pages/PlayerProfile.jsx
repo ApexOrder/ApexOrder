@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, Clock3, Crosshair, Gauge, Radio, ShieldCheck, Skull, Trophy, UserRound } from 'lucide-react';
+import { ArrowLeft, Clock3, Crosshair, Gauge, Radio, Server as ServerIcon, ShieldCheck, Skull, Trophy, UserRound } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 
 function formatDuration(seconds) {
@@ -61,6 +61,9 @@ export default function PlayerProfile() {
   if (error || !player) return <div className="mx-auto min-h-screen max-w-4xl px-4 pt-32"><Link to="/players" className="mb-6 inline-flex items-center gap-2 text-sm text-emerald-glow"><ArrowLeft size={15} /> Back to players</Link><div className="rounded-xl border border-red-400/20 bg-red-400/5 p-5 text-red-200">{error || 'Player profile not found.'}</div></div>;
 
   const sevenDays = player.games?.sevenDaysToDie;
+  const sevenDaysServerName = sevenDays?.serverId
+    ? serverNames.get(sevenDays.serverId) || sevenDays.serverId
+    : 'Unknown ApexOrder server';
 
   return (
     <div className="mx-auto min-h-screen max-w-5xl px-4 pb-20 pt-28 sm:px-6 lg:px-8">
@@ -96,19 +99,40 @@ export default function PlayerProfile() {
           <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
             <div>
               <div className="text-[10px] font-mono uppercase tracking-[0.25em] text-amber-300/70">7 Days to Die</div>
-              <h2 className="mt-1 text-xl font-black text-white">Survivor Statistics</h2>
+              <h2 className="mt-1 text-xl font-black text-white">Survivor Profile</h2>
             </div>
             <div className="text-xs text-white/35">Updated {formatDate(sevenDays.lastSeenAt)}</div>
           </div>
+
+          <div className="mb-4 grid gap-3 lg:grid-cols-2">
+            <div className="rounded-xl border border-amber-300/10 bg-amber-300/[0.035] p-4">
+              <div className="mb-2 flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-amber-300/70"><ServerIcon size={14} /> Server</div>
+              <div className="text-sm font-black text-white">{sevenDaysServerName}</div>
+              {sevenDays.serverId && <div className="mt-1 break-all font-mono text-[10px] text-white/25">{sevenDays.serverId}</div>}
+            </div>
+            <div className="rounded-xl border border-amber-300/10 bg-amber-300/[0.035] p-4">
+              <div className="mb-2 text-[10px] font-bold uppercase tracking-wider text-amber-300/70">Steam identity</div>
+              <div className="break-all font-mono text-sm font-black text-white">{sevenDays.steamId64 || player.providerId}</div>
+              {(sevenDays.steamProfileUrl || player.profileUrl) && <a href={sevenDays.steamProfileUrl || player.profileUrl} target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex text-xs font-bold text-amber-300 transition hover:text-amber-200">View Steam profile</a>}
+            </div>
+          </div>
+
+          <div className="mb-4 rounded-xl border border-white/7 bg-white/[0.025] p-4">
+            <div className="text-[10px] uppercase tracking-wider text-white/35">Player name and aliases</div>
+            <div className="mt-1 text-lg font-black text-white">{sevenDays.currentName || player.displayName}</div>
+            <div className="mt-2 text-xs text-white/45">{sevenDays.aliases?.length ? sevenDays.aliases.join(', ') : sevenDays.currentName || player.displayName}</div>
+          </div>
+
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <div className="rounded-xl border border-white/7 bg-white/[0.025] p-4"><Skull size={17} className="mb-3 text-amber-300" /><div className="text-2xl font-black text-white">{sevenDays.zombieKills}</div><div className="text-[10px] uppercase tracking-wider text-white/35">Zombie kills</div></div>
-            <div className="rounded-xl border border-white/7 bg-white/[0.025] p-4"><Crosshair size={17} className="mb-3 text-amber-300" /><div className="text-2xl font-black text-white">{sevenDays.pvpKills}</div><div className="text-[10px] uppercase tracking-wider text-white/35">Player kills</div></div>
+            <div className="rounded-xl border border-white/7 bg-white/[0.025] p-4"><Crosshair size={17} className="mb-3 text-amber-300" /><div className="text-2xl font-black text-white">{sevenDays.pvpKills}</div><div className="text-[10px] uppercase tracking-wider text-white/35">PvP kills</div></div>
             <div className="rounded-xl border border-white/7 bg-white/[0.025] p-4"><ShieldCheck size={17} className="mb-3 text-amber-300" /><div className="text-2xl font-black text-white">{sevenDays.deaths}</div><div className="text-[10px] uppercase tracking-wider text-white/35">Deaths</div></div>
             <div className="rounded-xl border border-white/7 bg-white/[0.025] p-4"><Gauge size={17} className="mb-3 text-amber-300" /><div className="text-2xl font-black text-white">{sevenDays.level ?? '—'}</div><div className="text-[10px] uppercase tracking-wider text-white/35">Level</div></div>
+            <div className="rounded-xl border border-white/7 bg-white/[0.025] p-4"><Gauge size={17} className="mb-3 text-amber-300" /><div className="text-2xl font-black text-white">{sevenDays.gameStage ?? '—'}</div><div className="text-[10px] uppercase tracking-wider text-white/35">Game stage</div></div>
             <div className="rounded-xl border border-white/7 bg-white/[0.025] p-4"><Trophy size={17} className="mb-3 text-amber-300" /><div className="text-2xl font-black text-white">{sevenDays.score ?? '—'}</div><div className="text-[10px] uppercase tracking-wider text-white/35">Score</div></div>
-            <div className="rounded-xl border border-white/7 bg-white/[0.025] p-4"><Clock3 size={17} className="mb-3 text-amber-300" /><div className="text-2xl font-black text-white">{formatDuration(sevenDays.totalPlaytimeSeconds)}</div><div className="text-[10px] uppercase tracking-wider text-white/35">7DTD playtime</div></div>
+            <div className="rounded-xl border border-white/7 bg-white/[0.025] p-4"><UserRound size={17} className="mb-3 text-amber-300" /><div className="text-sm font-black text-white">{formatDate(sevenDays.firstSeenAt)}</div><div className="text-[10px] uppercase tracking-wider text-white/35">First seen in 7DTD</div></div>
+            <div className="rounded-xl border border-white/7 bg-white/[0.025] p-4"><Radio size={17} className="mb-3 text-amber-300" /><div className="text-sm font-black text-white">{formatDate(sevenDays.lastSeenAt)}</div><div className="text-[10px] uppercase tracking-wider text-white/35">Last seen in 7DTD</div></div>
           </div>
-          {sevenDays.aliases?.length > 1 && <div className="mt-4 text-xs text-white/35">Known names: <span className="text-white/60">{sevenDays.aliases.join(', ')}</span></div>}
         </section>
       )}
 
