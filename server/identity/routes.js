@@ -1,21 +1,22 @@
-export function registerIdentityRoutes(app, identityService, telemetryProfileService) {
+function requireAdmin(request, response, next) {
+  const email = String(request.headers['cf-access-authenticated-user-email'] || '').trim();
+  const assertion = String(request.headers['cf-access-jwt-assertion'] || '').trim();
+  if (!email && !assertion) return response.status(401).json({ error: 'Admin authentication required.' });
+  next();
+}
+
+export function registerIdentityRoutes(app, identityService, telemetryProfileService, adminStatsService) {
   app.get('/api/players', (request, response) => {
-    const identityResult = identityService.listPlayers({
-      limit: request.query.limit,
-      offset: request.query.offset,
-    });
+    const identityResult = identityService.listPlayers({ limit: request.query.limit, offset: request.query.offset });
     const identities = identityResult.items.map((player) => telemetryProfileService.enrichPlayer(player));
     const identityKeys = new Set(identities.map((player) => `${player.provider}:${player.providerId}`));
-    const telemetryOnly = telemetryProfileService.listPlayers()
-      .filter((player) => !identityKeys.has(`${player.provider}:${player.providerId}`));
-    const items = [...identities, ...telemetryOnly]
-      .sort((left, right) => new Date(right.lastSeenAt) - new Date(left.lastSeenAt));
+    const telemetryOnly = telemetryProfileService.listPlayers().filter((player) => !identityKeys.has(`${player.provider}:${player.providerId}`));
+    const items = [...identities, ...telemetryOnly].sort((left, right) => new Date(right.lastSeenAt) - new Date(left.lastSeenAt));
     response.json({ ...identityResult, items, total: identityResult.total + telemetryOnly.length });
   });
 
   app.get('/api/players/online', (request, response) => {
-    const items = identityService.listOnlinePlayers({ serverId: request.query.serverId })
-      .map((player) => telemetryProfileService.enrichPlayer(player));
+    const items = identityService.listOnlinePlayers({ serverId: request.query.serverId }).map((player) => telemetryProfileService.enrichPlayer(player));
     response.json({ items, total: items.length });
   });
 
@@ -43,7 +44,7 @@ export function registerIdentityRoutes(app, identityService, telemetryProfileSer
         if (disconnectedAt >= monthStart) monthPlaytimeSeconds += durationSeconds;
       }
 
-      return {
+      return adminStatsService.applyDayzOverride({
         id: player.id,
         provider: player.provider,
         providerId: player.providerId,
@@ -60,18 +61,36 @@ export function registerIdentityRoutes(app, identityService, telemetryProfileSer
         sessionCount: player.sessionCount,
         longestSessionSeconds,
         currentSessionSeconds,
-      };
+      });
     });
 
     rows.sort((left, right) => right.totalPlaytimeSeconds - left.totalPlaytimeSeconds || String(left.displayName).localeCompare(String(right.displayName)));
     response.json(rows.slice(0, limit));
   });
 
+  app.patch('/api/admin/player-stats/:source/:id', requireAdmin, (request, response) => {
+    try {
+      const updated = adminStatsService.update(request.params.source, request.params.id, request.body || {});
+      if (!updated) return response.status(404).json({ error: 'Player stat record not found.' });
+      response.json({ ok: true, item: updated });
+    } catch (error) {
+      response.status(400).json({ error: error.message });
+    }
+  });
+
+  app.delete('/api/admin/player-stats/:source/:id', requireAdmin, (request, response) => {
+    try {
+      const deleted = adminStatsService.delete(request.params.source, request.params.id);
+      if (!deleted) return response.status(404).json({ error: 'Player stat record not found.' });
+      response.json({ ok: true });
+    } catch (error) {
+      response.status(400).json({ error: error.message });
+    }
+  });
+
   app.get('/api/players/:id', (request, response) => {
     const identityPlayer = identityService.getPlayer(request.params.id);
-    const player = identityPlayer
-      ? telemetryProfileService.enrichPlayer(identityPlayer)
-      : telemetryProfileService.getPlayerBySyntheticId(request.params.id);
+    const player = identityPlayer ? telemetryProfileService.enrichPlayer(identityPlayer) : telemetryProfileService.getPlayerBySyntheticId(request.params.id);
     if (!player) return response.status(404).json({ error: 'Player not found.' });
     response.json(player);
   });
@@ -83,9 +102,6 @@ export function registerIdentityRoutes(app, identityService, telemetryProfileSer
       if (!telemetryPlayer) return response.status(404).json({ error: 'Player not found.' });
       return response.json({ items: [], total: 0, limit: Number(request.query.limit || 50), offset: Number(request.query.offset || 0) });
     }
-    response.json(identityService.listSessions(request.params.id, {
-      limit: request.query.limit,
-      offset: request.query.offset,
-    }));
+    response.json(identityService.listSessions(request.params.id, { limit: request.query.limit, offset: request.query.offset }));
   });
 }

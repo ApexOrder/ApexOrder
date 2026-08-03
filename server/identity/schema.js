@@ -58,5 +58,42 @@ export function initialiseIdentitySchema(db) {
     CREATE UNIQUE INDEX IF NOT EXISTS idx_player_sessions_open
       ON player_sessions (player_id, server_id)
       WHERE disconnected_at IS NULL;
+
+    CREATE TABLE IF NOT EXISTS telemetry_events (
+      id TEXT PRIMARY KEY,
+      server_id TEXT NOT NULL,
+      event_type TEXT NOT NULL,
+      occurred_at TEXT NOT NULL,
+      received_at TEXT NOT NULL,
+      player_id TEXT,
+      player_name TEXT,
+      payload TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_telemetry_events_player_time ON telemetry_events (player_id, occurred_at DESC);
+
+    CREATE TABLE IF NOT EXISTS telemetry_players (
+      player_id TEXT PRIMARY KEY,
+      provider TEXT,
+      current_name TEXT,
+      aliases TEXT NOT NULL DEFAULT '[]',
+      first_seen_at TEXT NOT NULL,
+      last_seen_at TEXT NOT NULL,
+      total_playtime_seconds INTEGER NOT NULL DEFAULT 0,
+      zombie_kills INTEGER NOT NULL DEFAULT 0,
+      pvp_kills INTEGER NOT NULL DEFAULT 0,
+      deaths INTEGER NOT NULL DEFAULT 0,
+      level INTEGER,
+      game_stage INTEGER,
+      score INTEGER,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS player_stat_overrides (
+      source TEXT NOT NULL,
+      player_id TEXT NOT NULL,
+      data TEXT NOT NULL DEFAULT '{}',
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY (source, player_id)
+    );
   `);
 }
