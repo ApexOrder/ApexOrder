@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Plus, RefreshCw, Save, Trash2, X } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 
@@ -39,7 +39,6 @@ const SECTIONS = {
 function emptyFor(section) {
   return Object.fromEntries((section.fields || []).map(([key, , type, options]) => [key, type === 'number' ? 0 : type === 'boolean' ? true : type === 'select' ? options?.[0] || '' : '']));
 }
-
 function formForRow(section, row) { return { ...emptyFor(section), ...row }; }
 function formatDuration(seconds = 0) {
   const total = Math.max(0, Number(seconds) || 0);
@@ -80,12 +79,7 @@ function LiveStatRow({ row, onEdit, onDelete }) {
   const details = source === 'dayz'
     ? [`Total ${formatDuration(row.totalPlaytimeSeconds)}`, `Week ${formatDuration(row.weekPlaytimeSeconds)}`, `Month ${formatDuration(row.monthPlaytimeSeconds)}`, `${Number(row.sessionCount) || 0} sessions`, `Longest ${formatDuration(row.longestSessionSeconds)}`]
     : [`${Number(row.zombieKills) || 0} zombies`, `${Number(row.pvpKills) || 0} PvP`, `${Number(row.deaths) || 0} deaths`, `${formatDuration(row.totalPlaytimeSeconds)} played`, `Score ${Number(row.score) || 0}`];
-  return <div className="rounded-lg border border-white/5 bg-black/25 p-3">
-    <div className="flex flex-wrap items-center justify-between gap-3">
-      <div><p className="font-bold text-white">{row.player_name || 'Unknown player'}</p><p className="text-xs text-gray-500">{row.server_name || 'Unknown server'} · {source.toUpperCase()}{row.online ? ' · ONLINE' : ''}</p></div>
-      <div className="flex flex-wrap items-center gap-2"><div className="flex flex-wrap gap-2">{details.map((detail) => <span key={detail} className="rounded border border-emerald-400/15 bg-emerald-400/5 px-2 py-1 text-[11px] font-mono text-gray-300">{detail}</span>)}</div><button onClick={() => onEdit(row)} className="rounded border border-emerald-400/20 px-3 py-1.5 text-xs font-bold text-emerald-300">EDIT</button><button onClick={() => onDelete(row)} className="rounded border border-red-400/20 p-2 text-red-300"><Trash2 size={14} /></button></div>
-    </div>
-  </div>;
+  return <div className="rounded-lg border border-white/5 bg-black/25 p-3"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="font-bold text-white">{row.player_name || 'Unknown player'}</p><p className="text-xs text-gray-500">{row.server_name || 'Unknown server'} · {source.toUpperCase()}{row.online ? ' · ONLINE' : ''}</p></div><div className="flex flex-wrap items-center gap-2"><div className="flex flex-wrap gap-2">{details.map((detail) => <span key={detail} className="rounded border border-emerald-400/15 bg-emerald-400/5 px-2 py-1 text-[11px] font-mono text-gray-300">{detail}</span>)}</div><button onClick={() => onEdit(row)} className="rounded border border-emerald-400/20 px-3 py-1.5 text-xs font-bold text-emerald-300">EDIT</button><button onClick={() => onDelete(row)} className="rounded border border-red-400/20 p-2 text-red-300"><Trash2 size={14} /></button></div></div></div>;
 }
 
 export default function ContentManager() {
@@ -97,6 +91,7 @@ export default function ContentManager() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [gameFilter, setGameFilter] = useState('all');
+  const requestId = useRef(0);
   const section = SECTIONS[entity];
 
   const loadLiveStats = async () => {
@@ -116,25 +111,33 @@ export default function ContentManager() {
     try { sevenRows = await readRows(sevenResult, '7DTD'); } catch (error) { errors.push(error.message); }
     try { dayzRows = await readRows(dayzResult, 'DayZ'); } catch (error) { errors.push(error.message); }
     if (errors.length === 2) throw new Error(errors.join(' '));
-    if (errors.length) setMessage(errors.join(' '));
     const sevenServer = servers.find(is7DTD);
     const dayzServer = servers.find(isDayZ);
-    return [
-      ...(sevenServer ? sevenRows.filter(Boolean).map((row) => ({ ...row, id: String(row.playerId || row.id || ''), player_name: row.name || row.aliases?.[0] || 'Unknown survivor', server_name: sevenServer.name, source: '7dtd' })).filter((row) => row.id) : []),
-      ...(dayzServer ? dayzRows.filter(Boolean).map((row) => ({ ...row, id: String(row.id || ''), player_name: row.displayName || 'Unknown survivor', server_name: dayzServer.name, source: 'dayz' })).filter((row) => row.id) : []),
-    ].sort((left, right) => String(left.server_name).localeCompare(String(right.server_name)) || String(left.player_name).localeCompare(String(right.player_name)));
+    return {
+      warning: errors.join(' '),
+      rows: [
+        ...(sevenServer ? sevenRows.filter(Boolean).map((row) => ({ ...row, id: String(row.playerId || row.id || ''), player_name: row.name || row.aliases?.[0] || 'Unknown survivor', server_name: sevenServer.name, source: '7dtd' })).filter((row) => row.id) : []),
+        ...(dayzServer ? dayzRows.filter(Boolean).map((row) => ({ ...row, id: String(row.id || ''), player_name: row.displayName || 'Unknown survivor', server_name: dayzServer.name, source: 'dayz' })).filter((row) => row.id) : []),
+      ].sort((left, right) => String(left.server_name).localeCompare(String(right.server_name)) || String(left.player_name).localeCompare(String(right.player_name))),
+    };
   };
 
   const load = async () => {
+    const currentRequest = ++requestId.current;
     setLoading(true); setMessage('');
     try {
-      const loaded = section.liveStats ? await loadLiveStats() : await base44.entities[entity].list(section.sort);
-      setRows(Array.isArray(loaded) ? loaded : []);
+      const result = section.liveStats ? await loadLiveStats() : { rows: await base44.entities[entity].list(section.sort), warning: '' };
+      if (currentRequest !== requestId.current) return;
+      setRows(Array.isArray(result.rows) ? result.rows : []);
+      setMessage(result.warning || '');
     } catch (error) {
+      if (currentRequest !== requestId.current) return;
       console.error('[ContentManager] load failed:', error);
       setRows([]);
       setMessage(error?.message || 'Unable to load this section.');
-    } finally { setLoading(false); }
+    } finally {
+      if (currentRequest === requestId.current) setLoading(false);
+    }
   };
 
   useEffect(() => { setEditing(null); setGameFilter('all'); load(); }, [entity]);
