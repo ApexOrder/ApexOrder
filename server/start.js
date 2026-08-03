@@ -3,6 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import Database from 'better-sqlite3';
 import express from 'express';
+import { createAdminStatsService } from './identity/adminStatsService.js';
 import { createIdentityService } from './identity/identityService.js';
 import { startPlayerPoller } from './identity/playerPoller.js';
 import { registerIdentityRoutes } from './identity/routes.js';
@@ -38,8 +39,9 @@ identityDb.pragma('busy_timeout = 5000');
 initialiseIdentitySchema(identityDb);
 const identityService = createIdentityService(identityDb);
 const telemetryProfileService = createTelemetryProfileService(identityDb);
+const adminStatsService = createAdminStatsService(identityDb);
 const sessionTracker = createSessionTracker(identityDb, identityService);
-registerIdentityRoutes(application, identityService, telemetryProfileService);
+registerIdentityRoutes(application, identityService, telemetryProfileService, adminStatsService);
 startPlayerPoller(identityDb, sessionTracker);
 
 console.log('Player identity API: enabled');
