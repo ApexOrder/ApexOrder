@@ -38,7 +38,22 @@ export default function Navbar() {
 
   useEffect(() => { const handler = () => setScrolled(window.scrollY > 20); window.addEventListener('scroll',handler); return () => window.removeEventListener('scroll',handler); },[]);
   useEffect(() => { setIsOpen(false); },[location]);
-  useEffect(() => { let active = true; base44.entities.NavigationItem.list('sort_order').then((rows) => { const built = buildNavigation(Array.isArray(rows) ? rows : []); if (active && built.length) setNavLinks(built); }).catch(() => {}); return () => { active = false; }; },[]);
+  useEffect(() => {
+    let active = true;
+    async function loadNavigation() {
+      try {
+        const entity = base44?.entities?.NavigationItem;
+        if (!entity || typeof entity.list !== 'function') return;
+        const rows = await entity.list('sort_order');
+        const built = buildNavigation(Array.isArray(rows) ? rows : []);
+        if (active && built.length) setNavLinks(built);
+      } catch (error) {
+        console.warn('[Navbar] Using fallback navigation:', error?.message || error);
+      }
+    }
+    void loadNavigation();
+    return () => { active = false; };
+  },[]);
   const activeTop = useMemo(() => navLinks.find((item) => location.pathname === item.path || item.dropdown?.some((child) => child.path === location.pathname)),[navLinks,location.pathname]);
 
   return <nav className={`fixed inset-x-0 top-0 z-50 transition-all duration-500 ${scrolled ? 'backdrop-blur-xl' : 'backdrop-blur-sm'}`} style={{background:scrolled?'linear-gradient(to bottom,rgba(0,0,0,.92) 50%,transparent)':'linear-gradient(to bottom,rgba(0,0,0,.55) 30%,transparent)',...(isHome?{paddingBottom:'100px',marginBottom:'-100px'}:{})}}>
