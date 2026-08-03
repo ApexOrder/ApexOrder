@@ -19,6 +19,54 @@ export function registerIdentityRoutes(app, identityService, telemetryProfileSer
     response.json({ items, total: items.length });
   });
 
+  app.get('/api/leaderboards/dayz', (request, response) => {
+    const limit = Math.min(100, Math.max(1, Number(request.query.limit || 25)));
+    const players = identityService.listPlayers({ limit: 100, offset: 0 }).items;
+    const now = Date.now();
+    const weekStart = now - (7 * 24 * 60 * 60 * 1000);
+    const monthStart = now - (30 * 24 * 60 * 60 * 1000);
+
+    const rows = players.map((player) => {
+      const sessions = identityService.listSessions(player.id, { limit: 100, offset: 0 }).items;
+      let weekPlaytimeSeconds = 0;
+      let monthPlaytimeSeconds = 0;
+      let longestSessionSeconds = 0;
+      let currentSessionSeconds = 0;
+
+      for (const session of sessions) {
+        const connectedAt = new Date(session.connectedAt).getTime();
+        const disconnectedAt = session.disconnectedAt ? new Date(session.disconnectedAt).getTime() : now;
+        const durationSeconds = Math.max(0, Number(session.durationSeconds ?? Math.floor((disconnectedAt - connectedAt) / 1000)) || 0);
+        longestSessionSeconds = Math.max(longestSessionSeconds, durationSeconds);
+        if (!session.disconnectedAt) currentSessionSeconds = Math.max(currentSessionSeconds, durationSeconds);
+        if (disconnectedAt >= weekStart) weekPlaytimeSeconds += durationSeconds;
+        if (disconnectedAt >= monthStart) monthPlaytimeSeconds += durationSeconds;
+      }
+
+      return {
+        id: player.id,
+        provider: player.provider,
+        providerId: player.providerId,
+        displayName: player.displayName,
+        avatarUrl: player.avatarUrl,
+        firstSeenAt: player.firstSeenAt,
+        lastSeenAt: player.lastSeenAt,
+        online: player.online,
+        currentServerId: player.currentServerId,
+        connectedSince: player.connectedSince,
+        totalPlaytimeSeconds: player.totalPlaytimeSeconds,
+        weekPlaytimeSeconds,
+        monthPlaytimeSeconds,
+        sessionCount: player.sessionCount,
+        longestSessionSeconds,
+        currentSessionSeconds,
+      };
+    });
+
+    rows.sort((left, right) => right.totalPlaytimeSeconds - left.totalPlaytimeSeconds || String(left.displayName).localeCompare(String(right.displayName)));
+    response.json(rows.slice(0, limit));
+  });
+
   app.get('/api/players/:id', (request, response) => {
     const identityPlayer = identityService.getPlayer(request.params.id);
     const player = identityPlayer
