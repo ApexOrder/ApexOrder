@@ -1,202 +1,55 @@
-import React, { useState } from 'react';
-import { motion } from 'framer-motion';
-import { Shield, Server, AlertTriangle, FileText, ExternalLink } from 'lucide-react';
-import SectionHeading from '@/components/ui/SectionHeading';
+import { useEffect, useMemo, useState } from 'react';
+import { AlertTriangle, Server, Shield } from 'lucide-react';
+import { base44 } from '@/api/base44Client';
 import GlassCard from '@/components/ui/GlassCard';
-import { communityRules, serverRules, servers } from '@/lib/serverData';
+import SectionHeading from '@/components/ui/SectionHeading';
+import { communityRules, serverRules, servers as fallbackServers } from '@/lib/serverData';
 
-const categories = [
-  { id: 'community', label: 'COMMUNITY RULES', icon: Shield },
-  { id: 'servers', label: 'SERVER RULES', icon: Server },
-  { id: 'appeal', label: 'BAN APPEALS', icon: AlertTriangle },
-];
+const iconFor = (slug) => slug === 'servers' ? Server : slug === 'appeal' ? AlertTriangle : Shield;
 
 export default function Rules() {
-  const [activeCategory, setActiveCategory] = useState('community');
-  const [activeServer, setActiveServer] = useState('7dtd');
+  const [categories,setCategories] = useState([]);
+  const [items,setItems] = useState([]);
+  const [servers,setServers] = useState([]);
+  const [activeCategory,setActiveCategory] = useState('community');
+  const [activeServer,setActiveServer] = useState('');
 
-  return (
-    <div className="pt-24 pb-20">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <SectionHeading title="The Codex" subtitle="RULES & CONDUCT" />
-        <p className="text-center text-muted-foreground max-w-2xl mx-auto -mt-8 mb-12">
-          Our rules exist to maintain a fair, fun, and respectful environment. All members are expected to know and follow these guidelines.
-        </p>
+  useEffect(() => {
+    Promise.all([
+      base44.entities.RuleCategory.list('sort_order').catch(() => []),
+      base44.entities.RuleItem.list('sort_order').catch(() => []),
+      base44.entities.Server.list('sort_order').catch(() => []),
+    ]).then(([categoryRows,itemRows,serverRows]) => {
+      const visibleCategories = (categoryRows || []).filter((row) => row.visible !== false);
+      setCategories(visibleCategories.length ? visibleCategories : [
+        {id:'community',slug:'community',label:'COMMUNITY RULES',description:'Rules for every ApexOrder member'},
+        {id:'servers',slug:'servers',label:'SERVER RULES',description:'Rules specific to each server'},
+        {id:'appeal',slug:'appeal',label:'BAN APPEALS',description:'Appeals and moderation'},
+      ]);
+      setItems(itemRows || []);
+      const nextServers = (serverRows || []).filter((row) => row.id !== 'coming-soon');
+      setServers(nextServers.length ? nextServers : fallbackServers.filter((row) => row.id !== 'coming-soon'));
+      setActiveServer((nextServers[0] || fallbackServers[0])?.id || '');
+    });
+  },[]);
 
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-          {/* Sidebar */}
-          <div className="lg:col-span-1 lg:sticky lg:top-24 lg:self-start">
-            <div className="glass-panel rounded-xl p-4 space-y-1">
-              {categories.map(cat => (
-                <button
-                  key={cat.id}
-                  onClick={() => setActiveCategory(cat.id)}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left text-sm font-semibold tracking-wider transition-all ${
-                    activeCategory === cat.id
-                      ? 'bg-emerald-glow/10 text-emerald-glow border border-emerald-glow/20'
-                      : 'text-muted-foreground hover:text-foreground border border-transparent'
-                  }`}
-                >
-                  <cat.icon size={16} />
-                  {cat.label}
-                </button>
-              ))}
-            </div>
+  const categoryItems = useMemo(() => items.filter((item) => item.visible !== false && item.category_slug === activeCategory && (!item.server_id || item.server_id === activeServer)).sort((a,b) => Number(a.sort_order || 0)-Number(b.sort_order || 0)),[items,activeCategory,activeServer]);
+  const fallbackItems = useMemo(() => {
+    if (activeCategory === 'community') return communityRules.map((rule,index) => ({id:`community-${index}`,title:rule.title,description:rule.description}));
+    if (activeCategory === 'servers') return (serverRules[activeServer] || []).map((rule,index) => ({id:`server-${index}`,title:`Rule ${index+1}`,description:rule}));
+    return [
+      {id:'appeal-1',title:'Submit one honest appeal',description:'Provide your in-game name, server and a clear explanation of why the ban should be reviewed.'},
+      {id:'appeal-2',title:'Allow time for review',description:'Moderation reviews each appeal individually. Repeated or abusive submissions may be rejected.'},
+    ];
+  },[activeCategory,activeServer]);
+  const visibleItems = categoryItems.length ? categoryItems : fallbackItems;
 
-            {/* Quick disclaimer */}
-            <div className="glass-panel rounded-xl p-4 mt-4">
-              <div className="flex items-start gap-2 text-xs text-muted-foreground">
-                <FileText size={14} className="text-gold mt-0.5 shrink-0" />
-                <p>Rules are enforced by our moderation team. Repeated violations result in escalating penalties up to permanent ban.</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Content */}
-          <div className="lg:col-span-3">
-            {activeCategory === 'community' && (
-              <motion.div
-                key="community"
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="space-y-4"
-              >
-                {communityRules.map((rule, i) => (
-                  <motion.div
-                    key={rule.number}
-                    initial={{ opacity: 0, x: 10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: i * 0.05 }}
-                  >
-                    <GlassCard className="flex items-start gap-5 !p-5">
-                      <div className="w-10 h-10 shrink-0 rounded-lg bg-emerald-glow/10 border border-emerald-glow/20 flex items-center justify-center">
-                        <span className="text-emerald-glow font-mono font-bold text-sm">{rule.number}</span>
-                      </div>
-                      <div>
-                        <h4 className="text-foreground font-heading font-bold text-sm mb-1">{rule.title}</h4>
-                        <p className="text-muted-foreground text-sm leading-relaxed">{rule.description}</p>
-                      </div>
-                    </GlassCard>
-                  </motion.div>
-                ))}
-              </motion.div>
-            )}
-
-            {activeCategory === 'servers' && (
-              <motion.div
-                key="servers"
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-              >
-                {/* Server selector */}
-                <div className="flex flex-wrap gap-2 mb-6">
-                  {servers.filter(s => s.id !== 'coming-soon').map(server => (
-                    <button
-                      key={server.id}
-                      onClick={() => setActiveServer(server.id)}
-                      className={`px-4 py-2 text-xs font-mono tracking-wider rounded border transition-all ${
-                        activeServer === server.id
-                          ? 'bg-emerald-glow/10 border-emerald-glow/40 text-emerald-glow'
-                          : 'border-border text-muted-foreground hover:text-foreground hover:border-foreground/30'
-                      }`}
-                    >
-                      {server.name}
-                    </button>
-                  ))}
-                </div>
-
-                <GlassCard>
-                  <h3 className="text-foreground font-heading font-bold mb-4 flex items-center gap-2">
-                    <Server size={18} className="text-emerald-glow" />
-                    {servers.find(s => s.id === activeServer)?.name} Rules
-                  </h3>
-                  <ul className="space-y-3">
-                    {(serverRules[activeServer] || []).map((rule, i) => (
-                      <motion.li
-                        key={i}
-                        initial={{ opacity: 0, x: 10 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: i * 0.05 }}
-                        className="flex items-start gap-3"
-                      >
-                        <span className="w-6 h-6 shrink-0 rounded bg-obsidian border border-border flex items-center justify-center text-xs font-mono text-emerald-glow">
-                          {i + 1}
-                        </span>
-                        <p className="text-muted-foreground text-sm leading-relaxed pt-0.5">{rule}</p>
-                      </motion.li>
-                    ))}
-                  </ul>
-                  <p className="text-xs text-muted-foreground/60 font-mono mt-6">
-                    These rules supplement the community rules above. All community rules apply to all servers.
-                  </p>
-                </GlassCard>
-              </motion.div>
-            )}
-
-            {activeCategory === 'appeal' && (
-              <motion.div
-                key="appeal"
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-              >
-                <GlassCard className="mb-6">
-                  <div className="flex items-start gap-4">
-                    <div className="w-12 h-12 rounded-lg bg-gold/10 border border-gold/20 flex items-center justify-center shrink-0">
-                      <AlertTriangle size={24} className="text-gold" />
-                    </div>
-                    <div>
-                      <h3 className="text-foreground font-heading font-bold text-lg mb-2">Ban Appeals</h3>
-                      <p className="text-muted-foreground leading-relaxed mb-4">
-                        If you believe your ban was unjust or you want a second chance, you can submit a ban appeal through our Discord. Our moderation team reviews every appeal fairly and thoroughly.
-                      </p>
-                      <div className="space-y-3">
-                       <div className="glass-panel rounded-lg p-4">
-                         <h4 className="text-foreground font-semibold text-sm mb-2">How to Appeal</h4>
-                         <ol className="list-decimal list-inside space-y-1.5 text-sm text-muted-foreground">
-                           <li>Fill out the ban appeal form below</li>
-                           <li>Provide your in-game name, server, and reason for appeal</li>
-                           <li>Be honest and respectful — this is your chance to make things right</li>
-                           <li>Wait for a staff member to review your case (usually within 48 hours)</li>
-                         </ol>
-                       </div>
-                       <a
-                         href="/ban-appeal"
-                         className="inline-flex items-center gap-2 px-6 py-2.5 bg-gold/10 border border-gold/30 text-gold font-semibold text-sm tracking-wider rounded hover:bg-gold/20 transition-all"
-                       >
-                         SUBMIT APPEAL FORM
-                         <ExternalLink size={14} />
-                       </a>
-                      </div>
-                    </div>
-                  </div>
-                </GlassCard>
-
-                <GlassCard>
-                  <h4 className="text-foreground font-heading font-bold text-sm mb-3">Important Notes</h4>
-                  <ul className="space-y-2 text-sm text-muted-foreground">
-                    <li className="flex items-start gap-2">
-                      <span className="text-gold">•</span>
-                      Appealing does not guarantee an unban. Each case is reviewed individually.
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="text-gold">•</span>
-                      Only one appeal per ban. Spamming appeals will result in denial.
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="text-gold">•</span>
-                      Permanent bans for cheating are rarely overturned.
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="text-gold">•</span>
-                      If your appeal is denied, you may try again after 30 days.
-                    </li>
-                  </ul>
-                </GlassCard>
-              </motion.div>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+  return <div className="pb-20 pt-24"><div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+    <SectionHeading title="The Codex" subtitle="RULES & CONDUCT" />
+    <p className="mx-auto -mt-8 mb-12 max-w-2xl text-center text-muted-foreground">Rules and categories on this page are now managed directly through Admin → Navigation & Pages.</p>
+    <div className="grid gap-8 lg:grid-cols-4"><aside className="lg:sticky lg:top-24 lg:self-start"><div className="glass-panel space-y-1 rounded-xl p-4">{categories.map((category) => { const Icon = iconFor(category.slug); return <button key={category.id} onClick={() => setActiveCategory(category.slug)} className={`flex w-full items-center gap-3 rounded-lg border px-4 py-3 text-left text-sm font-semibold tracking-wider ${activeCategory===category.slug?'border-emerald-glow/20 bg-emerald-glow/10 text-emerald-glow':'border-transparent text-muted-foreground hover:text-foreground'}`}><Icon size={16}/>{category.label}</button>; })}</div></aside>
+      <main className="lg:col-span-3">{activeCategory === 'servers' && <div className="mb-6 flex flex-wrap gap-2">{servers.map((server) => <button key={server.id} onClick={() => setActiveServer(server.id)} className={`rounded border px-4 py-2 text-xs font-mono ${activeServer===server.id?'border-emerald-glow/40 bg-emerald-glow/10 text-emerald-glow':'border-border text-muted-foreground'}`}>{server.name}</button>)}</div>}
+        <div className="space-y-4">{visibleItems.map((rule,index) => <GlassCard key={rule.id || index} className="flex items-start gap-5 !p-5"><div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-emerald-glow/20 bg-emerald-glow/10"><span className="font-mono text-sm font-bold text-emerald-glow">{index+1}</span></div><div><h3 className="mb-1 text-sm font-bold text-foreground">{rule.title || `Rule ${index+1}`}</h3><p className="text-sm leading-relaxed text-muted-foreground">{rule.description}</p></div></GlassCard>)}</div>
+      </main></div>
+  </div></div>;
 }
