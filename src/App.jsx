@@ -25,49 +25,18 @@ import BanAppeal from './pages/BanAppeal.jsx';
 import Recruitment from './pages/Recruitment.jsx';
 import Inventory from './pages/Inventory.jsx';
 import Login from './pages/Login.jsx';
+import DynamicPage from './pages/DynamicPage.jsx';
 import SiteLayout from './components/layout/SiteLayout';
 
 function AppRoutes() {
-  return (
-    <Routes>
-      <Route element={<SiteLayout />}>
-        <Route path="/" element={<Home />} />
-        <Route path="/servers" element={<Servers />} />
-        <Route path="/community" element={<Community />} />
-        <Route path="/rules" element={<Rules />} />
-        <Route path="/downloads" element={<Downloads />} />
-        <Route path="/projects" element={<Projects />} />
-        <Route path="/store" element={<StoreWithMemberLogin />} />
-        <Route path="/events" element={<Events />} />
-        <Route path="/stats" element={<Stats />} />
-        <Route path="/players" element={<Players />} />
-        <Route path="/players/:id" element={<PlayerProfile />} />
-        <Route path="/changelog" element={<Changelog />} />
-        <Route path="/news" element={<News />} />
-        <Route path="/ban-appeal" element={<BanAppeal />} />
-        <Route path="/recruitment" element={<Recruitment />} />
-        <Route path="/inventory" element={<Inventory />} />
-      </Route>
-      <Route path="/login" element={<Login />} />
-      <Route path="/admin" element={<Admin />} />
-      <Route path="*" element={<PageNotFound />} />
-    </Routes>
-  );
+  return <Routes>
+    <Route element={<SiteLayout />}>
+      <Route path="/" element={<Home />} /><Route path="/servers" element={<Servers />} /><Route path="/community" element={<Community />} /><Route path="/rules" element={<Rules />} /><Route path="/downloads" element={<Downloads />} /><Route path="/projects" element={<Projects />} /><Route path="/store" element={<StoreWithMemberLogin />} /><Route path="/events" element={<Events />} /><Route path="/stats" element={<Stats />} /><Route path="/players" element={<Players />} /><Route path="/players/:id" element={<PlayerProfile />} /><Route path="/changelog" element={<Changelog />} /><Route path="/news" element={<News />} /><Route path="/ban-appeal" element={<BanAppeal />} /><Route path="/recruitment" element={<Recruitment />} /><Route path="/inventory" element={<Inventory />} /><Route path="/page/:slug" element={<DynamicPage />} />
+    </Route>
+    <Route path="/login" element={<Login />} /><Route path="/admin" element={<Admin />} /><Route path="*" element={<PageNotFound />} />
+  </Routes>;
 }
 
 export default function App() {
-  return (
-    <AuthProvider>
-      <QueryClientProvider client={queryClientInstance}>
-        <SiteSettingsProvider>
-          <Router>
-            <ScrollToTop />
-            <HomeHeroStatsSync />
-            <AppRoutes />
-          </Router>
-          <Toaster />
-        </SiteSettingsProvider>
-      </QueryClientProvider>
-    </AuthProvider>
-  );
+  return <AuthProvider><QueryClientProvider client={queryClientInstance}><SiteSettingsProvider><Router><ScrollToTop /><HomeHeroStatsSync /><AppRoutes /></Router><Toaster /></SiteSettingsProvider></QueryClientProvider></AuthProvider>;
 }
