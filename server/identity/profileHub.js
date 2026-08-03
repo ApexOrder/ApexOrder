@@ -42,8 +42,24 @@ export function registerProfileHubRoutes(app, db) {
       is_public=excluded.is_public, updated_at=excluded.updated_at
   `);
   const listAccounts = db.prepare('SELECT provider, provider_id, display_name, profile_url, avatar_url, verified_at, is_public FROM player_linked_accounts WHERE player_id = ? ORDER BY provider');
-  const getDayz = db.prepare('SELECT total_playtime_seconds, session_count, first_seen_at, last_seen_at FROM players WHERE id = ?');
-  const getSeven = db.prepare('SELECT current_name, aliases_json, zombie_kills, pvp_kills, deaths, total_playtime_seconds, level, game_stage, score, first_seen_at, last_seen_at, server_id FROM telemetry_players WHERE player_id = ?');
+  const getDayz = db.prepare(`
+    SELECT
+      p.first_seen_at,
+      p.last_seen_at,
+      COUNT(s.id) AS session_count,
+      COALESCE(SUM(
+        CASE
+          WHEN s.duration_seconds IS NOT NULL THEN s.duration_seconds
+          WHEN s.disconnected_at IS NULL THEN MAX(0, CAST(strftime('%s', 'now') - strftime('%s', s.connected_at) AS INTEGER))
+          ELSE MAX(0, CAST(strftime('%s', s.disconnected_at) - strftime('%s', s.connected_at) AS INTEGER))
+        END
+      ), 0) AS total_playtime_seconds
+    FROM players p
+    LEFT JOIN player_sessions s ON s.player_id = p.id
+    WHERE p.id = ?
+    GROUP BY p.id, p.first_seen_at, p.last_seen_at
+  `);
+  const getSeven = db.prepare('SELECT current_name, aliases, zombie_kills, pvp_kills, deaths, total_playtime_seconds, level, game_stage, score, first_seen_at, last_seen_at FROM telemetry_players WHERE player_id = ?');
 
   function tokenHash(token) {
     return crypto.createHmac('sha256', sessionSecret).update(token).digest('hex');
@@ -102,7 +118,7 @@ export function registerProfileHubRoutes(app, db) {
       accounts: visibleAccounts.map((item) => ({ ...item, isPublic: Boolean(item.is_public) })),
       gameProfiles: {
         dayz: dayz ? { totalPlaytimeSeconds: dayz.total_playtime_seconds, sessionCount: dayz.session_count, firstSeenAt: dayz.first_seen_at, lastSeenAt: dayz.last_seen_at } : null,
-        sevenDaysToDie: seven ? { currentName: seven.current_name, aliases: JSON.parse(seven.aliases_json || '[]'), zombieKills: seven.zombie_kills, pvpKills: seven.pvp_kills, deaths: seven.deaths, totalPlaytimeSeconds: seven.total_playtime_seconds, level: seven.level, gameStage: seven.game_stage, score: seven.score, firstSeenAt: seven.first_seen_at, lastSeenAt: seven.last_seen_at, serverId: seven.server_id } : null,
+        sevenDaysToDie: seven ? { currentName: seven.current_name, aliases: JSON.parse(seven.aliases || '[]'), zombieKills: seven.zombie_kills, pvpKills: seven.pvp_kills, deaths: seven.deaths, totalPlaytimeSeconds: seven.total_playtime_seconds, level: seven.level, gameStage: seven.game_stage, score: seven.score, firstSeenAt: seven.first_seen_at, lastSeenAt: seven.last_seen_at, serverId: null } : null,
       },
       achievements: achievements(playerId, allAccounts, dayz, seven),
     });
