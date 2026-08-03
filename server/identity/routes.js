@@ -1,9 +1,4 @@
-function requireAdmin(request, response, next) {
-  const email = String(request.headers['cf-access-authenticated-user-email'] || '').trim();
-  const assertion = String(request.headers['cf-access-jwt-assertion'] || '').trim();
-  if (!email && !assertion) return response.status(401).json({ error: 'Admin authentication required.' });
-  next();
-}
+import { requireCloudflareAdmin } from '../adminAuth.js';
 
 export function registerIdentityRoutes(app, identityService, telemetryProfileService, adminStatsService) {
   app.get('/api/players', (request, response) => {
@@ -68,7 +63,7 @@ export function registerIdentityRoutes(app, identityService, telemetryProfileSer
     response.json(rows.slice(0, limit));
   });
 
-  app.patch('/api/admin/player-stats/:source/:id', requireAdmin, (request, response) => {
+  app.patch('/api/admin/player-stats/:source/:id', requireCloudflareAdmin, (request, response) => {
     try {
       const updated = adminStatsService.update(request.params.source, request.params.id, request.body || {});
       if (!updated) return response.status(404).json({ error: 'Player stat record not found.' });
@@ -78,7 +73,7 @@ export function registerIdentityRoutes(app, identityService, telemetryProfileSer
     }
   });
 
-  app.delete('/api/admin/player-stats/:source/:id', requireAdmin, (request, response) => {
+  app.delete('/api/admin/player-stats/:source/:id', requireCloudflareAdmin, (request, response) => {
     try {
       const deleted = adminStatsService.delete(request.params.source, request.params.id);
       if (!deleted) return response.status(404).json({ error: 'Player stat record not found.' });
