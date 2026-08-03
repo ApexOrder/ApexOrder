@@ -5,6 +5,7 @@ import Database from 'better-sqlite3';
 import express from 'express';
 import { createAdminStatsService } from './identity/adminStatsService.js';
 import { createIdentityService } from './identity/identityService.js';
+import { registerLinkedAccountRoutes } from './identity/linkedAccounts.js';
 import { startPlayerPoller } from './identity/playerPoller.js';
 import { registerIdentityRoutes } from './identity/routes.js';
 import { initialiseIdentitySchema } from './identity/schema.js';
@@ -42,6 +43,7 @@ const telemetryProfileService = createTelemetryProfileService(identityDb);
 const adminStatsService = createAdminStatsService(identityDb);
 const sessionTracker = createSessionTracker(identityDb, identityService);
 registerIdentityRoutes(application, identityService, telemetryProfileService, adminStatsService);
+registerLinkedAccountRoutes(application, identityDb);
 startPlayerPoller(identityDb, sessionTracker);
 
 console.log('Player identity API: enabled');
