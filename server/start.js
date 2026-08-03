@@ -7,6 +7,7 @@ import { createAdminStatsService } from './identity/adminStatsService.js';
 import { createIdentityService } from './identity/identityService.js';
 import { registerLinkedAccountRoutes } from './identity/linkedAccounts.js';
 import { startPlayerPoller } from './identity/playerPoller.js';
+import { applyStoredProviderSettings, registerProviderSettingsRoutes } from './identity/providerSettings.js';
 import { registerIdentityRoutes } from './identity/routes.js';
 import { initialiseIdentitySchema } from './identity/schema.js';
 import { createSessionTracker } from './identity/sessionTracker.js';
@@ -38,12 +39,14 @@ identityDb.pragma('foreign_keys = ON');
 identityDb.pragma('busy_timeout = 5000');
 
 initialiseIdentitySchema(identityDb);
+applyStoredProviderSettings(identityDb);
 const identityService = createIdentityService(identityDb);
 const telemetryProfileService = createTelemetryProfileService(identityDb);
 const adminStatsService = createAdminStatsService(identityDb);
 const sessionTracker = createSessionTracker(identityDb, identityService);
 registerIdentityRoutes(application, identityService, telemetryProfileService, adminStatsService);
 registerLinkedAccountRoutes(application, identityDb);
+registerProviderSettingsRoutes(application, identityDb);
 startPlayerPoller(identityDb, sessionTracker);
 
 console.log('Player identity API: enabled');
