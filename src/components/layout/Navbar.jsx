@@ -1,192 +1,53 @@
-import React, { useState, useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { ChevronDown, LogIn, LogOut, Menu, User, X } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
-import { Menu, X, ChevronDown, LogIn, LogOut, User } from 'lucide-react';
+import { base44 } from '@/api/base44Client';
 import { useAuth } from '@/lib/AuthContext';
 
-const navLinks = [
-  { label: 'HOME', path: '/' },
-  {
-    label: 'SERVERS',
-    path: '/servers',
-    dropdown: [
-      { label: 'Events', path: '/events' }
-    ]
-  },
-  { label: 'PLAYERS', path: '/players' },
-  {
-    label: 'COMMUNITY',
-    path: '/community',
-    dropdown: [
-      { label: 'Stats', path: '/stats' },
-      { label: 'Rules', path: '/rules' },
-      { label: 'Ban Appeal', path: '/ban-appeal' },
-      { label: 'Recruitment', path: '/recruitment' }
-    ]
-  },
-  {
-    label: 'NEWS',
-    path: '/news',
-    dropdown: [
-      { label: 'Changelog', path: '/changelog' }
-    ]
-  },
-  { label: 'PROJECTS', path: '/projects' },
-  { label: 'STORE', path: '/store' },
-  { label: 'ADMIN', path: '/admin' },
+const fallbackLinks = [
+  { label:'HOME', path:'/' },
+  { label:'SERVERS', path:'/servers', dropdown:[{label:'Events',path:'/events'}] },
+  { label:'PLAYERS', path:'/players' },
+  { label:'COMMUNITY', path:'/community', dropdown:[{label:'Stats',path:'/stats'},{label:'Rules',path:'/rules'},{label:'Ban Appeal',path:'/ban-appeal'},{label:'Recruitment',path:'/recruitment'}] },
+  { label:'NEWS', path:'/news', dropdown:[{label:'Changelog',path:'/changelog'}] },
+  { label:'PROJECTS', path:'/projects' }, { label:'STORE', path:'/store' }, { label:'ADMIN', path:'/admin' },
 ];
 
+function buildNavigation(rows) {
+  const visible = rows.filter((row) => row.visible !== false).sort((a,b) => Number(a.sort_order || 0) - Number(b.sort_order || 0));
+  const children = new Map();
+  visible.forEach((row) => { if (row.parent_id) children.set(row.parent_id,[...(children.get(row.parent_id) || []),row]); });
+  return visible.filter((row) => !row.parent_id).map((row) => ({
+    id: row.id, label: String(row.label || '').toUpperCase(), path: row.path || '#', external: Boolean(row.external),
+    dropdown: (children.get(row.id) || []).map((child) => ({ label: child.label, path: child.path || '#', external: Boolean(child.external) })),
+  }));
+}
+
+function NavTarget({ item, className, children, onClick }) {
+  if (item.external || /^https?:\/\//i.test(item.path)) return <a href={item.path} target="_blank" rel="noopener noreferrer" className={className} onClick={onClick}>{children}</a>;
+  return <Link to={item.path} className={className} onClick={onClick}>{children}</Link>;
+}
+
 export default function Navbar() {
-  const [isOpen, setIsOpen] = useState(false);
-  const [scrolled, setScrolled] = useState(false);
+  const [isOpen,setIsOpen] = useState(false);
+  const [scrolled,setScrolled] = useState(false);
+  const [navLinks,setNavLinks] = useState(fallbackLinks);
   const location = useLocation();
+  const { member,isLoading,loginWithDiscord,logoutMember } = useAuth();
   const isHome = location.pathname === '/';
-  const { member, isLoading, loginWithDiscord, logoutMember } = useAuth();
 
-  useEffect(() => {
-    const handleScroll = () => setScrolled(window.scrollY > 20);
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
+  useEffect(() => { const handler = () => setScrolled(window.scrollY > 20); window.addEventListener('scroll',handler); return () => window.removeEventListener('scroll',handler); },[]);
+  useEffect(() => { setIsOpen(false); },[location]);
+  useEffect(() => { let active = true; base44.entities.NavigationItem.list('sort_order').then((rows) => { const built = buildNavigation(Array.isArray(rows) ? rows : []); if (active && built.length) setNavLinks(built); }).catch(() => {}); return () => { active = false; }; },[]);
+  const activeTop = useMemo(() => navLinks.find((item) => location.pathname === item.path || item.dropdown?.some((child) => child.path === location.pathname)),[navLinks,location.pathname]);
 
-  useEffect(() => { setIsOpen(false); }, [location]);
-
-  return (
-    <nav
-      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${
-        scrolled ? 'backdrop-blur-xl' : 'backdrop-blur-sm'
-      }`}
-      style={{
-        background: scrolled
-          ? 'linear-gradient(to bottom, rgba(0,0,0,0.92) 50%, rgba(0,0,0,0) 100%)'
-          : 'linear-gradient(to bottom, rgba(0,0,0,0.55) 30%, rgba(0,0,0,0) 100%)',
-        ...(isHome && { paddingBottom: '100px', marginBottom: '-100px' }),
-      }}
-    >
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-14 lg:h-16">
-          <Link to="/" className="flex items-center gap-2.5 group shrink-0">
-            <div className="relative w-9 h-9 flex items-center justify-center">
-              <svg viewBox="0 0 40 40" className="w-9 h-9 absolute">
-                <polygon points="20,2 36,11 36,29 20,38 4,29 4,11" fill="none" stroke="#D4AF37" strokeWidth="1.5" opacity="0.8" />
-                <polygon points="20,6 32,13 32,27 20,34 8,27 8,13" fill="rgba(16,255,139,0.06)" stroke="rgba(16,255,139,0.3)" strokeWidth="0.5" />
-              </svg>
-              <span className="relative z-10 text-emerald-glow font-black text-base" style={{textShadow:'0 0 10px #10FF8B'}}>A</span>
-            </div>
-            <div className="flex items-center gap-0">
-              <span className="text-white font-heading font-bold text-xl tracking-[0.15em]">APEX</span>
-              <span className="font-heading font-bold text-xl tracking-[0.15em]" style={{color:'#10FF8B', textShadow:'0 0 12px rgba(16,255,139,0.6)'}}>ORDER</span>
-            </div>
-          </Link>
-
-          <div className="hidden lg:flex items-center gap-0">
-            {navLinks.map(link => (
-              <div key={link.label} className="relative group">
-                <Link
-                  to={link.path}
-                  className={`px-3 py-2 text-xs font-bold tracking-[0.15em] transition-all duration-300 flex items-center gap-1 ${
-                    location.pathname === link.path ? 'text-emerald-glow' : 'text-gray-400 hover:text-white'
-                  }`}
-                  style={location.pathname === link.path ? { color: '#10FF8B', textShadow: '0 0 10px rgba(16,255,139,0.5)' } : {}}
-                >
-                  {link.label}
-                  {link.dropdown && <ChevronDown size={12} className="opacity-60" />}
-                </Link>
-                {link.dropdown && (
-                  <div className="absolute top-full left-0 pt-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200">
-                    <div className="bg-black/95 backdrop-blur-xl border border-emerald-glow/20 rounded min-w-[160px]">
-                      {link.dropdown.map(sub => (
-                        <Link key={sub.path} to={sub.path} className="block px-4 py-2.5 text-xs font-bold tracking-wider text-gray-400 hover:text-emerald-glow hover:bg-emerald-glow/5 transition-colors first:rounded-t last:rounded-b">
-                          {sub.label}
-                        </Link>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-
-          <div className="hidden lg:flex items-center gap-3">
-            {!isLoading && (member ? (
-              <div className="relative group">
-                <button className="flex items-center gap-2 px-3 py-2 text-xs font-bold tracking-wider text-gray-300 hover:text-white">
-                  {member.avatar ? <img src={member.avatar} alt="" className="h-7 w-7 rounded-full" /> : <User size={16} />}
-                  <span className="max-w-28 truncate">{member.displayName}</span>
-                  <ChevronDown size={12} />
-                </button>
-                <div className="absolute top-full right-0 pt-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200">
-                  <div className="bg-black/95 backdrop-blur-xl border border-emerald-glow/20 rounded min-w-[180px] overflow-hidden">
-                    <Link to="/players" className="flex items-center gap-2 px-4 py-3 text-xs font-bold tracking-wider text-gray-400 hover:text-emerald-glow hover:bg-emerald-glow/5">
-                      <User size={14} /> Players
-                    </Link>
-                    <button onClick={logoutMember} className="w-full flex items-center gap-2 px-4 py-3 text-xs font-bold tracking-wider text-gray-400 hover:text-red-300 hover:bg-red-500/5">
-                      <LogOut size={14} /> Sign out
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <button
-                onClick={() => loginWithDiscord(location.pathname)}
-                className="flex items-center gap-2 px-4 py-2 font-bold text-xs tracking-[0.15em] rounded transition-all duration-300"
-                style={{ border: '1px solid rgba(16,255,139,0.55)', color: '#10FF8B' }}
-              >
-                <LogIn size={14} /> SIGN IN
-              </button>
-            ))}
-            <a
-              href="https://discord.gg/apexorder"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="px-4 py-2 font-bold text-xs tracking-[0.15em] rounded transition-all duration-300"
-              style={{ border: '1px solid #10FF8B', color: '#10FF8B', boxShadow: '0 0 12px rgba(16,255,139,0.2), inset 0 0 12px rgba(16,255,139,0.05)' }}
-            >
-              JOIN US
-            </a>
-          </div>
-
-          <button onClick={() => setIsOpen(!isOpen)} className="lg:hidden p-2 text-white hover:text-emerald-glow transition-colors" aria-label="Toggle menu">
-            {isOpen ? <X size={22} /> : <Menu size={22} />}
-          </button>
-        </div>
-      </div>
-
-      {isOpen && (
-        <div className="lg:hidden bg-black/95 backdrop-blur-xl border-t border-emerald-glow/10">
-          <div className="px-4 py-6 space-y-1">
-            {navLinks.map(link => (
-              <div key={link.label}>
-                <Link to={link.path} className="block px-4 py-3 text-sm font-bold tracking-wider text-gray-400 hover:text-white rounded transition-colors">{link.label}</Link>
-                {link.dropdown && (
-                  <div className="pl-8 space-y-1">
-                    {link.dropdown.map(sub => (
-                      <Link key={sub.path} to={sub.path} className="block px-4 py-2 text-xs font-bold tracking-wider text-gray-500 hover:text-emerald-glow transition-colors">{sub.label}</Link>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ))}
-            <div className="pt-4 border-t border-gray-800 mt-4 space-y-3">
-              {!isLoading && (member ? (
-                <>
-                  <div className="flex items-center gap-3 px-4 py-2 text-sm text-gray-300">
-                    {member.avatar ? <img src={member.avatar} alt="" className="h-9 w-9 rounded-full" /> : <User size={18} />}
-                    <span className="truncate">{member.displayName}</span>
-                  </div>
-                  <button onClick={logoutMember} className="w-full flex items-center justify-center gap-2 px-5 py-3 border border-red-500/40 text-red-300 font-bold text-sm tracking-wider rounded">
-                    <LogOut size={16} /> SIGN OUT
-                  </button>
-                </>
-              ) : (
-                <button onClick={() => loginWithDiscord(location.pathname)} className="w-full flex items-center justify-center gap-2 px-5 py-3 border border-emerald-glow/50 text-emerald-glow font-bold text-sm tracking-wider rounded">
-                  <LogIn size={16} /> SIGN IN WITH DISCORD
-                </button>
-              ))}
-              <a href="https://discord.gg/apexorder" target="_blank" rel="noopener noreferrer" className="block text-center px-5 py-3 border border-emerald-glow/50 text-emerald-glow font-bold text-sm tracking-wider rounded">JOIN US</a>
-            </div>
-          </div>
-        </div>
-      )}
-    </nav>
-  );
+  return <nav className={`fixed inset-x-0 top-0 z-50 transition-all duration-500 ${scrolled ? 'backdrop-blur-xl' : 'backdrop-blur-sm'}`} style={{background:scrolled?'linear-gradient(to bottom,rgba(0,0,0,.92) 50%,transparent)':'linear-gradient(to bottom,rgba(0,0,0,.55) 30%,transparent)',...(isHome?{paddingBottom:'100px',marginBottom:'-100px'}:{})}}>
+    <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8"><div className="flex h-14 items-center justify-between lg:h-16">
+      <Link to="/" className="flex shrink-0 items-center gap-2.5"><div className="flex h-9 w-9 items-center justify-center rounded border border-gold/60 text-base font-black text-emerald-glow">A</div><div><span className="font-heading text-xl font-bold tracking-[.15em] text-white">APEX</span><span className="font-heading text-xl font-bold tracking-[.15em] text-emerald-glow">ORDER</span></div></Link>
+      <div className="hidden items-center lg:flex">{navLinks.map((item) => <div key={item.id || item.path} className="group relative"><NavTarget item={item} className={`flex items-center gap-1 px-3 py-2 text-xs font-bold tracking-[.15em] transition ${activeTop === item ? 'text-emerald-glow' : 'text-gray-400 hover:text-white'}`}>{item.label}{item.dropdown?.length ? <ChevronDown size={12} /> : null}</NavTarget>{item.dropdown?.length ? <div className="invisible absolute left-0 top-full pt-2 opacity-0 transition group-hover:visible group-hover:opacity-100"><div className="min-w-[180px] rounded border border-emerald-glow/20 bg-black/95 backdrop-blur-xl">{item.dropdown.map((child) => <NavTarget key={child.path} item={child} className="block px-4 py-2.5 text-xs font-bold tracking-wider text-gray-400 hover:bg-emerald-glow/5 hover:text-emerald-glow">{child.label}</NavTarget>)}</div></div> : null}</div>)}</div>
+      <div className="hidden items-center gap-3 lg:flex">{!isLoading && (member ? <div className="group relative"><button className="flex items-center gap-2 px-3 py-2 text-xs font-bold text-gray-300">{member.avatar ? <img src={member.avatar} className="h-7 w-7 rounded-full" alt="" /> : <User size={16} />}<span className="max-w-28 truncate">{member.displayName}</span><ChevronDown size={12} /></button><div className="invisible absolute right-0 top-full pt-2 opacity-0 group-hover:visible group-hover:opacity-100"><div className="min-w-[180px] rounded border border-emerald-glow/20 bg-black/95"><Link to="/players" className="block px-4 py-3 text-xs text-gray-400 hover:text-emerald-glow">Players</Link><button onClick={logoutMember} className="flex w-full items-center gap-2 px-4 py-3 text-xs text-red-300"><LogOut size={14}/>Sign out</button></div></div></div> : <button onClick={() => loginWithDiscord(location.pathname)} className="flex items-center gap-2 rounded border border-emerald-glow/50 px-4 py-2 text-xs font-bold text-emerald-glow"><LogIn size={14}/> SIGN IN</button>)}</div>
+      <button onClick={() => setIsOpen(!isOpen)} className="p-2 text-white lg:hidden">{isOpen?<X size={22}/>:<Menu size={22}/>}</button>
+    </div></div>
+    {isOpen && <div className="border-t border-emerald-glow/10 bg-black/95 px-4 py-6 lg:hidden">{navLinks.map((item) => <div key={item.id || item.path}><NavTarget item={item} onClick={() => setIsOpen(false)} className="block px-4 py-3 text-sm font-bold tracking-wider text-gray-300">{item.label}</NavTarget>{item.dropdown?.map((child) => <NavTarget key={child.path} item={child} onClick={() => setIsOpen(false)} className="block px-8 py-2 text-xs font-bold text-gray-500 hover:text-emerald-glow">{child.label}</NavTarget>)}</div>)}</div>}
+  </nav>;
 }
