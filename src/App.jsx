@@ -15,8 +15,7 @@ import Downloads from './pages/Downloads';
 import Projects from './pages/Projects';
 import StoreWithMemberLogin from './pages/StoreWithMemberLogin';
 import Events from './pages/Events';
-import CommunityStatsHub from './pages/CommunityStatsHub.jsx';
-import DayZStats from './pages/DayZStats.jsx';
+import Stats from './pages/Stats';
 import Players from './pages/Players.jsx';
 import PlayerProfile from './pages/PlayerProfile.jsx';
 import Admin from './pages/Admin';
@@ -40,8 +39,7 @@ function AppRoutes() {
         <Route path="/projects" element={<Projects />} />
         <Route path="/store" element={<StoreWithMemberLogin />} />
         <Route path="/events" element={<Events />} />
-        <Route path="/stats" element={<CommunityStatsHub />} />
-        <Route path="/stats/dayz" element={<DayZStats />} />
+        <Route path="/stats" element={<Stats />} />
         <Route path="/players" element={<Players />} />
         <Route path="/players/:id" element={<PlayerProfile />} />
         <Route path="/changelog" element={<Changelog />} />
