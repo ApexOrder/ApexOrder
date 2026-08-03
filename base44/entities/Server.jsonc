@@ -2,24 +2,22 @@
   "name": "Server",
   "type": "object",
   "properties": {
-    "name": {
-      "type": "string",
-      "title": "Server Name"
-    },
-    "image": {
-      "type": "string",
-      "title": "Image URL"
-    },
-    "join_link": {
-      "type": "string",
-      "title": "Joining Link"
-    },
-    "api_link": {
-      "type": "string",
-      "title": "API Link"
-    }
+    "name": { "type": "string", "title": "Server Name" },
+    "image": { "type": "string", "title": "Image URL" },
+    "join_link": { "type": "string", "title": "Joining Link" },
+    "api_link": { "type": "string", "title": "API Link" },
+    "stat_show_zombie_kills": { "type": "boolean", "title": "Show Zombie Kills", "default": true },
+    "stat_show_pvp_kills": { "type": "boolean", "title": "Show PvP Kills", "default": true },
+    "stat_show_deaths": { "type": "boolean", "title": "Show Deaths", "default": true },
+    "stat_show_playtime": { "type": "boolean", "title": "Show Playtime", "default": true },
+    "stat_show_score": { "type": "boolean", "title": "Show Score", "default": true },
+    "stat_show_level": { "type": "boolean", "title": "Show Level / Game Stage", "default": true },
+    "stat_show_total_playtime": { "type": "boolean", "title": "Show Total Playtime", "default": true },
+    "stat_show_week_playtime": { "type": "boolean", "title": "Show Weekly Playtime", "default": true },
+    "stat_show_month_playtime": { "type": "boolean", "title": "Show Monthly Playtime", "default": true },
+    "stat_show_sessions": { "type": "boolean", "title": "Show Session Count", "default": true },
+    "stat_show_longest_session": { "type": "boolean", "title": "Show Longest Session", "default": true },
+    "stat_show_online_status": { "type": "boolean", "title": "Show Online Status", "default": true }
   },
-  "required": [
-    "name"
-  ]
+  "required": ["name"]
 }
