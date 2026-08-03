@@ -7,12 +7,7 @@ function parseCookies(header = '') {
   }));
 }
 
-export function registerProviderSettingsRoutes(app, db) {
-  const teamDomain = String(process.env.CLOUDFLARE_ACCESS_TEAM_DOMAIN || '').trim().replace(/\/$/, '');
-  const audience = String(process.env.CLOUDFLARE_ACCESS_AUD || '').trim();
-  const jwks = teamDomain && audience ? createRemoteJWKSet(new URL(`${teamDomain}/cdn-cgi/access/certs`)) : null;
-  const defaultRedirectUri = `${String(process.env.APP_BASE_URL || 'http://localhost:5173').trim().replace(/\/$/, '')}/api/auth/battlenet/callback`;
-
+function ensureSettingsTable(db) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS auth_provider_settings (
       provider TEXT PRIMARY KEY,
@@ -23,7 +18,26 @@ export function registerProviderSettingsRoutes(app, db) {
       updated_at TEXT NOT NULL
     );
   `);
+}
 
+export function applyStoredProviderSettings(db) {
+  ensureSettingsTable(db);
+  const row = db.prepare('SELECT * FROM auth_provider_settings WHERE provider = ?').get('battlenet');
+  if (!row) return false;
+  process.env.BATTLE_NET_CLIENT_ID = row.client_id || '';
+  process.env.BATTLE_NET_CLIENT_SECRET = row.client_secret || '';
+  process.env.BATTLE_NET_REDIRECT_URI = row.redirect_uri || '';
+  process.env.BATTLE_NET_REGION = row.region || 'eu';
+  return Boolean(row.client_id && row.client_secret);
+}
+
+export function registerProviderSettingsRoutes(app, db) {
+  const teamDomain = String(process.env.CLOUDFLARE_ACCESS_TEAM_DOMAIN || '').trim().replace(/\/$/, '');
+  const audience = String(process.env.CLOUDFLARE_ACCESS_AUD || '').trim();
+  const jwks = teamDomain && audience ? createRemoteJWKSet(new URL(`${teamDomain}/cdn-cgi/access/certs`)) : null;
+  const defaultRedirectUri = `${String(process.env.APP_BASE_URL || 'http://localhost:5173').trim().replace(/\/$/, '')}/api/auth/battlenet/callback`;
+
+  ensureSettingsTable(db);
   const getSettings = db.prepare('SELECT * FROM auth_provider_settings WHERE provider = ?');
   const saveSettings = db.prepare(`
     INSERT INTO auth_provider_settings (provider, client_id, client_secret, redirect_uri, region, updated_at)
@@ -88,6 +102,10 @@ export function registerProviderSettingsRoutes(app, db) {
       region,
       configured: true,
       updatedAt,
+      restarting: true,
     });
+
+    // PM2 will bring the application back up and the stored credentials are loaded before OAuth routes register.
+    setTimeout(() => process.exit(0), 500);
   });
 }
