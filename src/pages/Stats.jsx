@@ -1,39 +1,44 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Clock, RefreshCw, Skull, Star } from 'lucide-react';
+import { Clock, History, Radio, RefreshCw, Skull, Star, Timer } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import SectionHeading from '@/components/ui/SectionHeading';
 import GlassCard from '@/components/ui/GlassCard';
 
-function KDRatio({ kills, deaths }) {
-  const kd = deaths > 0 ? (kills / deaths).toFixed(2) : kills > 0 ? '∞' : '0.00';
-  const val = Number.parseFloat(kd);
-  const color = val >= 2 ? '#10FF8B' : val >= 1 ? '#D4AF37' : '#ef4444';
-  return <span style={{ color }} className="font-mono font-bold">{kd}</span>;
-}
-
 function RankIcon({ rank }) {
-  if (rank === 1) return <span className="text-base">🥇</span>;
-  if (rank === 2) return <span className="text-base">🥈</span>;
-  if (rank === 3) return <span className="text-base">🥉</span>;
+  if (rank === 1) return <span>🥇</span>;
+  if (rank === 2) return <span>🥈</span>;
+  if (rank === 3) return <span>🥉</span>;
   return <span className="font-mono text-xs text-gray-500">#{rank}</span>;
 }
 
+function formatDuration(seconds = 0) {
+  const total = Math.max(0, Number(seconds) || 0);
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  return hours ? `${hours}h ${minutes}m` : `${minutes}m`;
+}
+
+function serverText(server) {
+  return [server?.query_type, server?.queryType, server?.game, server?.name].filter(Boolean).join(' ').toLowerCase();
+}
+
 function isSevenDaysServer(server) {
-  const value = [server?.query_type, server?.queryType, server?.game, server?.name]
-    .filter(Boolean)
-    .join(' ')
-    .toLowerCase();
+  const value = serverText(server);
   return value.includes('7dtd') || value.includes('7 days') || value.includes('seven days');
 }
 
-function mapTelemetryStat(item, serverId) {
+function isDayZServer(server) {
+  return serverText(server).includes('dayz');
+}
+
+function mapSevenDays(item, serverId) {
   return {
-    id: `telemetry-${item.playerId}`,
+    id: `7dtd-${item.playerId}`,
     server_id: serverId,
     player_id: item.playerId,
     player_name: item.name || item.aliases?.[0] || 'Unknown survivor',
-    aliases: item.aliases || [],
     kills: item.zombieKills ?? 0,
     pvp_kills: item.pvpKills ?? 0,
     deaths: item.deaths ?? 0,
@@ -41,242 +46,183 @@ function mapTelemetryStat(item, serverId) {
     score: item.score ?? 0,
     level: item.level,
     game_stage: item.gameStage,
-    last_seen_at: item.lastSeenAt,
-    source: 'telemetry',
+    source: '7dtd',
   };
 }
 
-function ServerGameTab({ server, stats, isActive, onClick }) {
+function mapDayZ(item, serverId) {
+  return {
+    id: `dayz-${item.id}`,
+    profile_id: item.id,
+    server_id: serverId,
+    player_name: item.displayName || 'Unknown survivor',
+    totalPlaytimeSeconds: item.totalPlaytimeSeconds ?? 0,
+    weekPlaytimeSeconds: item.weekPlaytimeSeconds ?? 0,
+    monthPlaytimeSeconds: item.monthPlaytimeSeconds ?? 0,
+    sessionCount: item.sessionCount ?? 0,
+    longestSessionSeconds: item.longestSessionSeconds ?? 0,
+    currentSessionSeconds: item.currentSessionSeconds ?? 0,
+    online: Boolean(item.online),
+    last_seen_at: item.lastSeenAt,
+    source: 'dayz',
+  };
+}
+
+function ServerCard({ server, count, active, onClick }) {
   return (
-    <button
-      onClick={onClick}
-      className="flex flex-col items-center gap-1.5 px-4 py-3 rounded transition-all duration-200 min-w-[110px]"
-      style={isActive
-        ? { background: 'rgba(16,255,139,0.12)', border: '1px solid rgba(16,255,139,0.4)', color: '#10FF8B' }
-        : { background: 'rgba(10,20,10,0.4)', border: '1px solid rgba(16,255,139,0.1)', color: '#666' }}
-    >
+    <button onClick={onClick} className="flex flex-col items-center gap-1.5 px-4 py-3 rounded min-w-[110px] transition-all"
+      style={active ? { background: 'rgba(16,255,139,0.12)', border: '1px solid rgba(16,255,139,0.65)', color: '#10FF8B', boxShadow: '0 0 0 1px #10FF8B' } : { background: 'rgba(10,20,10,0.4)', border: '1px solid rgba(16,255,139,0.12)', color: '#666' }}>
       {server.image && <img src={server.image} alt="" className="w-8 h-8 rounded object-cover" />}
-      <span className="text-xs font-bold tracking-wider leading-tight text-center">{server.name}</span>
-      <span className="text-xs font-mono" style={{ color: isActive ? 'rgba(16,255,139,0.6)' : '#444' }}>
-        {stats.length} players
-      </span>
+      <span className="text-xs font-bold text-center">{server.name}</span>
+      <span className="text-xs font-mono">{count} players</span>
     </button>
   );
 }
 
-function LeaderboardRow({ stat, rank, sortKey, isSevenDays }) {
-  const highlightCell = (key) => key === sortKey
-    ? { color: '#10FF8B', fontWeight: 'bold' }
-    : { color: '#ccc' };
-
+function SevenDaysRow({ stat, rank, sortKey }) {
+  const valueClass = (key) => key === sortKey ? 'text-emerald-glow font-bold' : 'text-gray-300';
   return (
-    <motion.div
-      initial={{ opacity: 0, x: -10 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ delay: rank * 0.03 }}
-      className="flex items-center gap-3 px-4 py-3 rounded transition-colors hover:bg-white/5"
-      style={{
-        background: rank <= 3 ? `rgba(${rank === 1 ? '212,175,55' : rank === 2 ? '156,163,175' : '205,127,50'},0.05)` : 'transparent',
-        border: rank <= 3 ? `1px solid rgba(${rank === 1 ? '212,175,55' : rank === 2 ? '156,163,175' : '205,127,50'},0.15)` : '1px solid transparent',
-      }}
-    >
-      <div className="w-8 flex justify-center shrink-0"><RankIcon rank={rank} /></div>
-      <div className="flex items-center gap-2.5 flex-1 min-w-0">
-        {stat.avatar_url ? (
-          <img src={stat.avatar_url} alt="" className="w-8 h-8 rounded-full object-cover border border-white/10 shrink-0" />
-        ) : (
-          <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-xs font-bold"
-            style={{ background: 'rgba(16,255,139,0.1)', border: '1px solid rgba(16,255,139,0.2)', color: '#10FF8B' }}>
-            {stat.player_name?.[0]?.toUpperCase() || '?'}
-          </div>
-        )}
-        <div className="min-w-0">
-          <div className="text-sm font-bold text-white truncate">{stat.player_name}</div>
-          {stat.level != null && (
-            <span className="text-[10px] font-mono text-gray-500">LVL {stat.level}{stat.game_stage != null ? ` · GS ${stat.game_stage}` : ''}</span>
-          )}
-        </div>
-      </div>
-
-      <div className="hidden sm:flex items-center gap-6 text-sm">
-        <div className="text-center" style={highlightCell('kills')}>
-          <div className="text-xs text-gray-500 font-mono">{isSevenDays ? 'ZOMBIES' : 'KILLS'}</div>
-          <div>{stat.kills ?? 0}</div>
-        </div>
-        {isSevenDays && (
-          <div className="text-center" style={highlightCell('pvp_kills')}>
-            <div className="text-xs text-gray-500 font-mono">PVP</div>
-            <div>{stat.pvp_kills ?? 0}</div>
-          </div>
-        )}
-        <div className="text-center" style={highlightCell('deaths')}>
-          <div className="text-xs text-gray-500 font-mono">DEATHS</div>
-          <div>{stat.deaths ?? 0}</div>
-        </div>
-        <div className="text-center">
-          <div className="text-xs text-gray-500 font-mono">K/D</div>
-          <KDRatio kills={isSevenDays ? (stat.pvp_kills ?? 0) : (stat.kills ?? 0)} deaths={stat.deaths ?? 0} />
-        </div>
-        <div className="text-center" style={highlightCell('playtime_hours')}>
-          <div className="text-xs text-gray-500 font-mono">HOURS</div>
-          <div>{stat.playtime_hours ?? 0}</div>
-        </div>
-        <div className="text-center" style={highlightCell('score')}>
-          <div className="text-xs text-gray-500 font-mono">SCORE</div>
-          <div>{stat.score ?? 0}</div>
-        </div>
-      </div>
-
-      <div className="sm:hidden text-right">
-        <div className="text-xs text-gray-500 font-mono">{isSevenDays ? 'ZOMBIES' : 'SCORE'}</div>
-        <div className="text-sm font-bold" style={{ color: '#10FF8B' }}>{isSevenDays ? (stat.kills ?? 0) : (stat.score ?? 0)}</div>
+    <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: rank * 0.025 }} className="flex items-center gap-3 px-4 py-3 rounded hover:bg-white/5">
+      <div className="w-8 text-center"><RankIcon rank={rank} /></div>
+      <div className="w-9 h-9 rounded-full flex items-center justify-center font-bold shrink-0" style={{ background: 'rgba(16,255,139,0.1)', color: '#10FF8B' }}>{stat.player_name?.[0]?.toUpperCase() || '?'}</div>
+      <div className="flex-1 min-w-0"><div className="font-bold text-white truncate">{stat.player_name}</div>{stat.level != null && <div className="text-[10px] font-mono text-gray-500">LVL {stat.level}{stat.game_stage != null ? ` · GS ${stat.game_stage}` : ''}</div>}</div>
+      <div className="hidden sm:grid grid-cols-5 gap-6 text-center text-xs font-mono">
+        <div><div className="text-gray-600">ZOMBIES</div><div className={valueClass('kills')}>{stat.kills}</div></div>
+        <div><div className="text-gray-600">PVP</div><div>{stat.pvp_kills}</div></div>
+        <div><div className="text-gray-600">DEATHS</div><div>{stat.deaths}</div></div>
+        <div><div className="text-gray-600">HOURS</div><div className={valueClass('playtime_hours')}>{stat.playtime_hours}</div></div>
+        <div><div className="text-gray-600">SCORE</div><div className={valueClass('score')}>{stat.score}</div></div>
       </div>
     </motion.div>
   );
 }
 
-const SORT_OPTIONS = [
-  { key: 'score', label: 'Score', icon: Star },
-  { key: 'kills', label: 'Kills', icon: Skull },
-  { key: 'playtime_hours', label: 'Playtime', icon: Clock },
-];
+function DayZRow({ stat, rank, sortKey }) {
+  const valueClass = (key) => key === sortKey ? 'text-emerald-glow font-bold' : 'text-gray-300';
+  return (
+    <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: rank * 0.025 }}>
+      <Link to={`/players/${stat.profile_id}`} className="flex items-center gap-3 px-4 py-3 rounded hover:bg-white/5">
+        <div className="w-8 text-center"><RankIcon rank={rank} /></div>
+        <div className="w-9 h-9 rounded-full flex items-center justify-center font-bold shrink-0" style={{ background: 'rgba(16,255,139,0.1)', color: '#10FF8B' }}>{stat.player_name?.[0]?.toUpperCase() || '?'}</div>
+        <div className="flex-1 min-w-0"><div className="font-bold text-white truncate">{stat.player_name}</div><div className="text-[10px] font-mono text-gray-500">{stat.online ? `ONLINE · ${formatDuration(stat.currentSessionSeconds)}` : `Last active ${stat.last_seen_at ? new Date(stat.last_seen_at).toLocaleString() : 'unknown'}`}</div></div>
+        <div className="hidden sm:grid grid-cols-5 gap-5 text-center text-xs font-mono">
+          <div><div className="text-gray-600">TOTAL</div><div className={valueClass('totalPlaytimeSeconds')}>{formatDuration(stat.totalPlaytimeSeconds)}</div></div>
+          <div><div className="text-gray-600">WEEK</div><div className={valueClass('weekPlaytimeSeconds')}>{formatDuration(stat.weekPlaytimeSeconds)}</div></div>
+          <div><div className="text-gray-600">MONTH</div><div className={valueClass('monthPlaytimeSeconds')}>{formatDuration(stat.monthPlaytimeSeconds)}</div></div>
+          <div><div className="text-gray-600">SESSIONS</div><div className={valueClass('sessionCount')}>{stat.sessionCount}</div></div>
+          <div><div className="text-gray-600">LONGEST</div><div className={valueClass('longestSessionSeconds')}>{formatDuration(stat.longestSessionSeconds)}</div></div>
+        </div>
+      </Link>
+    </motion.div>
+  );
+}
 
 export default function Stats() {
   const [servers, setServers] = useState([]);
   const [manualStats, setManualStats] = useState([]);
-  const [telemetryStats, setTelemetryStats] = useState([]);
+  const [sevenDaysStats, setSevenDaysStats] = useState([]);
+  const [dayzStats, setDayzStats] = useState([]);
+  const [activeServerId, setActiveServerId] = useState(null);
+  const [sortKey, setSortKey] = useState('kills');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [activeServerId, setActiveServerId] = useState(null);
-  const [sortKey, setSortKey] = useState('score');
-  const [telemetryError, setTelemetryError] = useState(null);
+  const [error, setError] = useState(null);
 
-  const loadTelemetry = async (serverList, silent = false) => {
+  const loadLive = async (serverList, silent = false) => {
     if (!silent) setRefreshing(true);
     try {
-      const response = await fetch('/api/leaderboards/7dtd?limit=100', { cache: 'no-store' });
-      if (!response.ok) throw new Error(`Telemetry returned ${response.status}`);
-      const rows = await response.json();
-      const sevenDaysServers = serverList.filter(isSevenDaysServer);
-      const target = sevenDaysServers[0];
-      setTelemetryStats(target ? rows.map((row) => mapTelemetryStat(row, target.id)) : []);
-      setTelemetryError(null);
-    } catch (error) {
-      console.error('[Stats] Failed to load 7DTD telemetry:', error);
-      setTelemetryError(error.message);
+      const [sevenResponse, dayzResponse] = await Promise.all([
+        fetch('/api/leaderboards/7dtd?limit=100', { cache: 'no-store' }),
+        fetch('/api/leaderboards/dayz?limit=100', { cache: 'no-store' }),
+      ]);
+      if (!sevenResponse.ok || !dayzResponse.ok) throw new Error(`Leaderboard request failed (${sevenResponse.status}/${dayzResponse.status})`);
+      const [sevenRows, dayzRows] = await Promise.all([sevenResponse.json(), dayzResponse.json()]);
+      const sevenServer = serverList.find(isSevenDaysServer);
+      const dayzServer = serverList.find(isDayZServer);
+      setSevenDaysStats(sevenServer ? sevenRows.map((row) => mapSevenDays(row, sevenServer.id)) : []);
+      setDayzStats(dayzServer ? dayzRows.map((row) => mapDayZ(row, dayzServer.id)) : []);
+      setError(null);
+    } catch (loadError) {
+      console.error('[Stats] Failed to load live leaderboards:', loadError);
+      setError(loadError.message);
     } finally {
+      setLoading(false);
       if (!silent) setRefreshing(false);
     }
   };
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([
-      base44.entities.Server.list(),
-      base44.entities.PlayerStat.list(),
-    ]).then(async ([svrs, stats]) => {
+    Promise.all([base44.entities.Server.list(), base44.entities.PlayerStat.list()]).then(async ([serverList, stats]) => {
       if (cancelled) return;
-      setServers(svrs);
+      setServers(serverList);
       setManualStats(stats);
-      if (svrs.length > 0) setActiveServerId(svrs[0].id);
-      await loadTelemetry(svrs, true);
-      if (!cancelled) setLoading(false);
-    }).catch((error) => {
-      console.error('[Stats] Failed to load stats page:', error);
-      if (!cancelled) setLoading(false);
-    });
+      if (serverList.length) setActiveServerId(serverList[0].id);
+      await loadLive(serverList, true);
+    }).catch((loadError) => { console.error(loadError); setLoading(false); });
     return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {
     if (!servers.length) return undefined;
-    const timer = window.setInterval(() => loadTelemetry(servers, true), 30000);
+    const timer = window.setInterval(() => loadLive(servers, true), 30000);
     return () => window.clearInterval(timer);
   }, [servers]);
 
   const allStats = useMemo(() => {
-    const telemetryServerIds = new Set(telemetryStats.map((stat) => stat.server_id));
-    return [
-      ...manualStats.filter((stat) => !telemetryServerIds.has(stat.server_id)),
-      ...telemetryStats,
-    ];
-  }, [manualStats, telemetryStats]);
+    const liveIds = new Set([...sevenDaysStats, ...dayzStats].map((stat) => stat.server_id));
+    return [...manualStats.filter((stat) => !liveIds.has(stat.server_id)), ...sevenDaysStats, ...dayzStats];
+  }, [manualStats, sevenDaysStats, dayzStats]);
 
-  const serverStats = allStats.filter((stat) => stat.server_id === activeServerId);
-  const sorted = [...serverStats].sort((a, b) => (b[sortKey] ?? 0) - (a[sortKey] ?? 0));
   const activeServer = servers.find((server) => server.id === activeServerId);
+  const activeIsDayZ = isDayZServer(activeServer);
   const activeIsSevenDays = isSevenDaysServer(activeServer);
-  const visibleSortOptions = activeIsSevenDays
-    ? [{ key: 'kills', label: 'Zombie kills', icon: Skull }, { key: 'playtime_hours', label: 'Playtime', icon: Clock }, { key: 'score', label: 'Score', icon: Star }]
-    : SORT_OPTIONS;
+  const serverStats = allStats.filter((stat) => stat.server_id === activeServerId);
+
+  const sortOptions = activeIsDayZ ? [
+    { key: 'totalPlaytimeSeconds', label: 'Total playtime', icon: Clock },
+    { key: 'weekPlaytimeSeconds', label: 'This week', icon: Timer },
+    { key: 'monthPlaytimeSeconds', label: 'This month', icon: History },
+    { key: 'sessionCount', label: 'Sessions', icon: Radio },
+    { key: 'longestSessionSeconds', label: 'Longest session', icon: Clock },
+  ] : activeIsSevenDays ? [
+    { key: 'kills', label: 'Zombie kills', icon: Skull },
+    { key: 'playtime_hours', label: 'Playtime', icon: Clock },
+    { key: 'score', label: 'Score', icon: Star },
+  ] : [
+    { key: 'score', label: 'Score', icon: Star },
+    { key: 'kills', label: 'Kills', icon: Skull },
+    { key: 'playtime_hours', label: 'Playtime', icon: Clock },
+  ];
 
   useEffect(() => {
-    if (activeIsSevenDays && sortKey === 'score') setSortKey('kills');
-  }, [activeServerId, activeIsSevenDays]);
+    setSortKey(activeIsDayZ ? 'totalPlaytimeSeconds' : activeIsSevenDays ? 'kills' : 'score');
+  }, [activeServerId]);
 
-  if (loading) {
-    return <div className="pt-24 pb-20 flex items-center justify-center min-h-[60vh]"><div className="w-8 h-8 border-2 border-emerald-glow/20 border-t-emerald-glow rounded-full animate-spin" /></div>;
-  }
+  const sorted = [...serverStats].sort((a, b) => (Number(b[sortKey]) || 0) - (Number(a[sortKey]) || 0));
+  const totalHours = activeIsDayZ
+    ? Math.round(serverStats.reduce((sum, stat) => sum + stat.totalPlaytimeSeconds, 0) / 360) / 10
+    : Math.round(serverStats.reduce((sum, stat) => sum + (stat.playtime_hours || 0), 0) * 10) / 10;
+
+  if (loading) return <div className="pt-24 min-h-[60vh] flex items-center justify-center"><div className="w-8 h-8 border-2 border-emerald-glow/20 border-t-emerald-glow rounded-full animate-spin" /></div>;
 
   return (
     <div className="pt-24 pb-20">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
         <SectionHeading title="Community Stats" subtitle="LIVE LEADERBOARDS" />
+        <div className="flex flex-wrap gap-3 justify-center mb-10">
+          {servers.map((server) => <ServerCard key={server.id} server={server} count={allStats.filter((stat) => stat.server_id === server.id).length} active={activeServerId === server.id} onClick={() => setActiveServerId(server.id)} />)}
+        </div>
 
-        {servers.length === 0 ? (
-          <div className="text-center py-20 text-gray-600 font-mono tracking-wider">No servers found. Add servers in the admin panel.</div>
-        ) : (
-          <>
-            <div className="flex flex-wrap gap-3 justify-center mb-10">
-              {servers.map((server) => (
-                <ServerGameTab key={server.id} server={server} stats={allStats.filter((stat) => stat.server_id === server.id)} isActive={activeServerId === server.id} onClick={() => setActiveServerId(server.id)} />
-              ))}
-            </div>
+        {activeServer && <GlassCard className="flex items-center gap-5 !p-5 mb-8">
+          {activeServer.image && <img src={activeServer.image} alt="" className="w-16 h-16 rounded-lg object-cover border border-emerald-glow/20" />}
+          <div className="flex-1"><div className="text-xs font-mono tracking-[0.3em] text-gold mb-1">{activeIsDayZ || activeIsSevenDays ? 'LIVE TELEMETRY' : 'ACTIVE SERVER'}</div><h2 className="text-xl font-heading font-bold text-white">{activeServer.name}</h2><div className="flex flex-wrap gap-4 mt-2 text-xs font-mono text-gray-500"><span><b className="text-emerald-glow">{serverStats.length}</b> players tracked</span>{activeIsDayZ ? <span><b className="text-gold">{serverStats.filter((stat) => stat.online).length}</b> online</span> : <span><b className="text-gold">{serverStats.reduce((sum, stat) => sum + (stat.kills || 0), 0)}</b> {activeIsSevenDays ? 'zombies killed' : 'total kills'}</span>}<span><b className="text-emerald-glow">{totalHours}</b>h playtime</span></div>{error && <div className="mt-2 text-xs font-mono text-red-400">Live stats unavailable: {error}</div>}</div>
+          {(activeIsDayZ || activeIsSevenDays) && <button onClick={() => loadLive(servers)} disabled={refreshing} className="p-2.5 rounded border border-emerald-glow/30 text-emerald-glow disabled:opacity-40"><RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} /></button>}
+        </GlassCard>}
 
-            {activeServer && (
-              <motion.div key={activeServer.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
-                <GlassCard className="flex items-center gap-5 !p-5">
-                  {activeServer.image && <img src={activeServer.image} alt="" className="w-16 h-16 rounded-lg object-cover border border-emerald-glow/20" />}
-                  <div className="flex-1">
-                    <div className="text-xs font-mono tracking-[0.3em] text-gold mb-1">{activeIsSevenDays ? 'LIVE TELEMETRY' : 'ACTIVE SERVER'}</div>
-                    <h2 className="text-xl font-heading font-bold text-white">{activeServer.name}</h2>
-                    <div className="flex flex-wrap gap-4 mt-2 text-xs font-mono text-gray-500">
-                      <span><span style={{ color: '#10FF8B' }}>{serverStats.length}</span> players tracked</span>
-                      <span><span style={{ color: '#D4AF37' }}>{serverStats.reduce((total, stat) => total + (stat.kills ?? 0), 0)}</span> {activeIsSevenDays ? 'zombies killed' : 'total kills'}</span>
-                      <span><span style={{ color: '#10FF8B' }}>{Math.round(serverStats.reduce((total, stat) => total + (stat.playtime_hours ?? 0), 0) * 10) / 10}</span>h playtime</span>
-                    </div>
-                    {activeIsSevenDays && telemetryError && <div className="mt-2 text-xs font-mono text-red-400">Telemetry temporarily unavailable: {telemetryError}</div>}
-                  </div>
-                  {activeIsSevenDays && (
-                    <button onClick={() => loadTelemetry(servers)} disabled={refreshing} className="p-2.5 rounded border border-emerald-glow/30 text-emerald-glow disabled:opacity-40" title="Refresh telemetry">
-                      <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} />
-                    </button>
-                  )}
-                </GlassCard>
-              </motion.div>
-            )}
+        <div className="flex flex-wrap items-center gap-2 mb-4"><span className="text-xs font-mono text-gray-500 mr-1">SORT BY</span>{sortOptions.map((option) => <button key={option.key} onClick={() => setSortKey(option.key)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold tracking-wider rounded" style={sortKey === option.key ? { background: 'rgba(16,255,139,0.12)', border: '1px solid rgba(16,255,139,0.4)', color: '#10FF8B' } : { border: '1px solid rgba(255,255,255,0.08)', color: '#666' }}><option.icon size={11} />{option.label.toUpperCase()}</button>)}</div>
 
-            <div className="flex items-center gap-2 mb-4">
-              <span className="text-xs font-mono text-gray-500 mr-1">SORT BY</span>
-              {visibleSortOptions.map((option) => (
-                <button key={option.key} onClick={() => setSortKey(option.key)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold tracking-wider rounded transition-all"
-                  style={sortKey === option.key ? { background: 'rgba(16,255,139,0.12)', border: '1px solid rgba(16,255,139,0.4)', color: '#10FF8B' } : { background: 'transparent', border: '1px solid rgba(255,255,255,0.08)', color: '#555' }}>
-                  <option.icon size={11} />{option.label.toUpperCase()}
-                </button>
-              ))}
-            </div>
-
-            {sorted.length === 0 ? (
-              <div className="text-center py-16 text-gray-600 font-mono tracking-wider text-sm">
-                {activeIsSevenDays ? 'No telemetry has been captured yet. Join the server to create the first live player record.' : 'No stats yet for this server.'}
-              </div>
-            ) : (
-              <GlassCard className="!p-3 space-y-1">
-                {sorted.map((stat, index) => <LeaderboardRow key={stat.id} stat={stat} rank={index + 1} sortKey={sortKey} isSevenDays={activeIsSevenDays} />)}
-              </GlassCard>
-            )}
-          </>
-        )}
+        {sorted.length === 0 ? <div className="text-center py-16 text-gray-600 font-mono text-sm">No stats yet for this server.</div> : <GlassCard className="!p-3 space-y-1">{sorted.map((stat, index) => activeIsDayZ ? <DayZRow key={stat.id} stat={stat} rank={index + 1} sortKey={sortKey} /> : <SevenDaysRow key={stat.id} stat={stat} rank={index + 1} sortKey={sortKey} />)}</GlassCard>}
       </div>
     </div>
   );
