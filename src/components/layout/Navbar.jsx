@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ChevronDown, LogIn, LogOut, Menu, User, X } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
-import { base44 } from '@/api/base44Client';
+import { listCmsEntities } from '@/api/cmsApi';
 import { useAuth } from '@/lib/AuthContext';
 
 const fallbackLinks = [
@@ -42,10 +42,8 @@ export default function Navbar() {
     let active = true;
     async function loadNavigation() {
       try {
-        const entity = base44?.entities?.NavigationItem;
-        if (!entity || typeof entity.list !== 'function') return;
-        const rows = await entity.list('sort_order');
-        const built = buildNavigation(Array.isArray(rows) ? rows : []);
+        const rows = await listCmsEntities('NavigationItem','sort_order');
+        const built = buildNavigation(rows);
         if (active && built.length) setNavLinks(built);
       } catch (error) {
         console.warn('[Navbar] Using fallback navigation:', error?.message || error);
