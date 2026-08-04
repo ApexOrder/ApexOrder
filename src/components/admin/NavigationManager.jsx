@@ -147,18 +147,50 @@ export default function NavigationManager() {
     setLoading(true);
     setMessage('');
     try {
+      const existing = await listCmsEntities('NavigationItem', 'sort_order');
+      const working = [...existing];
+      let added = 0;
+
       for (let index = 0; index < DEFAULT_NAV.length; index += 1) {
         const item = DEFAULT_NAV[index];
-        const parent = await createCmsEntity('NavigationItem', { label: item.label, path: item.path, sort_order: (index + 1) * 10, visible: true, external: false });
+        let parent = working.find((row) => !row.parent_id && row.path === item.path);
+
+        if (!parent) {
+          parent = await createCmsEntity('NavigationItem', {
+            label: item.label,
+            path: item.path,
+            parent_id: '',
+            sort_order: (index + 1) * 10,
+            visible: true,
+            external: false,
+          });
+          working.push(parent);
+          added += 1;
+        }
+
         for (let childIndex = 0; childIndex < item.children.length; childIndex += 1) {
           const [label, path] = item.children[childIndex];
-          await createCmsEntity('NavigationItem', { label, path, parent_id: parent.id, sort_order: childIndex + 1, visible: true, external: false });
+          if (working.some((row) => row.path === path)) continue;
+
+          const child = await createCmsEntity('NavigationItem', {
+            label,
+            path,
+            parent_id: parent.id,
+            sort_order: childIndex + 1,
+            visible: true,
+            external: false,
+          });
+          working.push(child);
+          added += 1;
         }
       }
-      setMessage('Your current website menu has been imported. You can now edit it safely.');
+
+      setMessage(added
+        ? `${added} missing default menu item${added === 1 ? '' : 's'} added. Your existing links were left unchanged.`
+        : 'All default menu items are already present. Nothing was changed.');
       await load();
     } catch (error) {
-      setMessage(error.message || 'Unable to import navigation.');
+      setMessage(error.message || 'Unable to restore default navigation.');
       setLoading(false);
     }
   }
@@ -201,19 +233,19 @@ export default function NavigationManager() {
           <Label title="Rule title" help="Used as the heading for community rules; optional for server and appeal notes."><input className={inputClass} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></Label>
           <Label title="Position" help="Lower numbers appear first."><input className={inputClass} type="number" value={form.sort_order} onChange={(e) => setForm({ ...form, sort_order: Number(e.target.value) })} /></Label>
           <Label title="Rule text" wide><textarea rows={5} className={inputClass} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></Label>
-          <Toggle label="Visible" value={form.visible} onChange={(value) => setForm({ ...form, visible: value })} help="Hide it temporarily without deleting it." />
+          <Toggle label="Visible" value={form.visible} onChange={(value) => setForm({ ...form, visible: value })} help="Hide this rule without deleting it." />
         </>}
       </div>
-      <div className="mt-5 flex flex-wrap gap-2"><button onClick={save} disabled={loading} className="flex items-center gap-2 rounded border border-emerald-400/30 bg-emerald-400/10 px-4 py-2 text-sm font-bold text-emerald-300"><Save size={15} /> {loading ? 'SAVING…' : 'SAVE'}</button><button onClick={() => setForm(null)} className="rounded border border-white/10 px-4 py-2 text-sm text-gray-400">CANCEL</button>{type === 'PageContent' && form.slug && <a href={`/page/${slugify(form.slug)}`} target="_blank" rel="noreferrer" className="flex items-center gap-2 rounded border border-white/10 px-4 py-2 text-sm text-gray-400"><ExternalLink size={14} /> PREVIEW URL</a>}</div>
+      <div className="mt-5 flex gap-2"><button onClick={save} disabled={loading} className="flex items-center gap-2 rounded border border-emerald-400/30 bg-emerald-400/10 px-4 py-2 text-sm font-bold text-emerald-300"><Save size={15}/> SAVE</button><button onClick={() => setForm(null)} className="rounded border border-white/10 px-4 py-2 text-sm text-gray-400">CANCEL</button></div>
     </div>;
   }
 
   return <div className="space-y-5">
-    <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-xl font-black text-white">WEBSITE CONTENT</h2><p className="mt-1 text-sm text-gray-500">Simple controls for pages, menus and rules. No database IDs or technical setup required.</p></div><button onClick={load} className="rounded border border-white/10 p-2 text-gray-400" title="Refresh"><RefreshCw size={16} className={loading ? 'animate-spin' : ''} /></button></div>
-    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">{SECTIONS.map((item) => <button key={item.id} onClick={() => setType(item.id)} className={`rounded-lg border p-3 text-left ${type === item.id ? 'border-emerald-400/40 bg-emerald-400/10' : 'border-white/10 bg-black/20'}`}><span className={`block text-sm font-bold ${type === item.id ? 'text-emerald-300' : 'text-gray-300'}`}>{item.label}</span><span className="mt-1 block text-xs leading-5 text-gray-500">{item.description}</span></button>)}</div>
+    <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-xl font-black text-white">WEBSITE CONTENT</h2><p className="mt-1 text-sm text-gray-500">Edit the menu, create pages and manage rules without touching code.</p></div><button onClick={load} className="rounded border border-white/10 p-2 text-gray-400"><RefreshCw size={16} className={loading ? 'animate-spin' : ''}/></button></div>
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{SECTIONS.map((item) => <button key={item.id} onClick={() => setType(item.id)} className={`rounded-xl border p-4 text-left ${type === item.id ? 'border-emerald-400/40 bg-emerald-400/10' : 'border-white/10 bg-black/20'}`}><div className={type === item.id ? 'font-bold text-emerald-300' : 'font-bold text-white'}>{item.label}</div><div className="mt-1 text-xs text-gray-500">{item.description}</div></button>)}</div>
     {message && <div className="rounded-lg border border-amber-400/20 bg-amber-400/5 p-3 text-sm text-amber-200">{message}</div>}
     {renderForm()}
-    {!form && <div className="flex flex-wrap gap-2"><button onClick={() => setForm(newForm(type))} className="flex items-center gap-2 rounded border border-emerald-400/30 bg-emerald-400/10 px-4 py-2 text-sm font-bold text-emerald-300"><Plus size={15} /> {type === 'NavigationItem' ? 'ADD MENU LINK' : type === 'PageContent' ? 'CREATE NEW PAGE' : type === 'RuleCategory' ? 'ADD RULE SECTION' : 'ADD RULE'}</button>{type === 'NavigationItem' && !rows.length && <button onClick={importDefaults} className="rounded border border-gold/30 bg-gold/10 px-4 py-2 text-sm font-bold text-gold">IMPORT EXISTING WEBSITE MENU</button>}</div>}
-    <div className="space-y-2">{rows.map((row) => <div key={row.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-white/7 bg-black/25 p-4"><div><div className="font-bold text-white">{row.label || row.title || row.slug || row.id}</div><div className="mt-1 text-xs text-gray-500">{type === 'NavigationItem' ? `${row.path || 'No destination'}${row.parent_id ? ` · inside ${parentNames.get(row.parent_id) || 'dropdown'}` : ' · top-level'}` : type === 'PageContent' ? `/page/${row.slug}${row.published === false ? ' · unpublished' : ''}` : type === 'RuleItem' ? `${row.category_slug}${row.server_id ? ` · ${servers.find((server) => server.id === row.server_id)?.name || 'server'}` : ''}` : row.slug}</div></div><div className="flex gap-2"><button onClick={() => setForm({ ...row })} className="rounded border border-emerald-400/20 px-3 py-1.5 text-xs font-bold text-emerald-300">EDIT</button><button onClick={() => remove(row)} className="rounded border border-red-400/20 p-2 text-red-300" title="Delete"><Trash2 size={14} /></button></div></div>)}{!rows.length && !loading && <div className="rounded-lg border border-dashed border-white/10 py-10 text-center text-sm text-gray-500">Nothing has been added here yet.</div>}</div>
+    {!form && <div className="flex flex-wrap gap-2"><button onClick={() => setForm(newForm(type))} className="flex items-center gap-2 rounded border border-emerald-400/30 bg-emerald-400/10 px-4 py-2 text-sm font-bold text-emerald-300"><Plus size={15}/> ADD {section.label.toUpperCase()}</button>{type === 'NavigationItem' && <button onClick={importDefaults} className="rounded border border-gold/30 bg-gold/10 px-4 py-2 text-sm font-bold text-gold">RESTORE MISSING DEFAULT MENU ITEMS</button>}</div>}
+    <div className="space-y-2">{rows.map((row) => <div key={row.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-white/7 bg-black/25 p-4"><div><div className="font-bold text-white">{row.label || row.title || row.slug || row.id}</div><div className="mt-1 text-xs text-gray-500">{type === 'NavigationItem' ? `${row.path || 'No destination'}${row.parent_id ? ` · inside ${parentNames.get(row.parent_id) || 'dropdown'}` : ' · top-level'}` : type === 'PageContent' ? `/page/${row.slug}${row.published === false ? ' · unpublished' : ''}` : type === 'RuleItem' ? `${row.category_slug}${row.server_id ? ` · ${servers.find((server) => server.id === row.server_id)?.name || row.server_id}` : ''}` : row.slug}</div></div><div className="flex gap-2">{type === 'PageContent' && row.published !== false && <a href={`/page/${row.slug}`} target="_blank" rel="noreferrer" className="rounded border border-white/10 p-2 text-gray-400"><ExternalLink size={14}/></a>}<button onClick={() => setForm({ ...row })} className="rounded border border-emerald-400/20 px-3 py-1.5 text-xs font-bold text-emerald-300">EDIT</button><button onClick={() => remove(row)} className="rounded border border-red-400/20 p-2 text-red-300"><Trash2 size={14}/></button></div></div>)}{!rows.length && !loading && <div className="rounded-lg border border-dashed border-white/10 py-10 text-center text-sm text-gray-500">Nothing here yet. Use the button above to add your first item.</div>}</div>
   </div>;
 }
