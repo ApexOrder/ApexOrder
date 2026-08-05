@@ -1,20 +1,32 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Plus, RefreshCw, Save, Trash2, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, RefreshCw, Save, Trash2, X } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 
-const QUERY_TYPES = ['protocol-valve', 'dayz', 'minecraft', 'minecraftbedrock', 'rust', 'valheim', 'arkse', 'conanexiles', 'terraria', 'cs2', 'teamspeak3', 'mumble'];
+const QUERY_TYPES = ['protocol-valve', 'minecraft', 'minecraftbedrock', 'rust', 'valheim', 'arkse', 'conanexiles', 'terraria', 'cs2', 'teamspeak3', 'mumble'];
+const GAME_PROFILES = [
+  { id: '7dtd', label: '7 Days to Die', queryType: 'protocol-valve', defaultPort: 26903 },
+  { id: 'dayz', label: 'DayZ', queryType: 'dayz', defaultPort: 2305 },
+  { id: 'palworld', label: 'Palworld', queryType: 'palworld-rest', defaultPort: 8212 },
+  { id: 'minecraft', label: 'Minecraft Java', queryType: 'minecraft', defaultPort: 25565 },
+  { id: 'minecraftbedrock', label: 'Minecraft Bedrock', queryType: 'minecraftbedrock', defaultPort: 19132 },
+  { id: 'rust', label: 'Rust', queryType: 'rust', defaultPort: 28016 },
+  { id: 'valheim', label: 'Valheim', queryType: 'valheim', defaultPort: 2457 },
+  { id: 'arkse', label: 'ARK: Survival Evolved', queryType: 'arkse', defaultPort: 27015 },
+  { id: 'generic', label: 'Other / Generic GameDig', queryType: 'protocol-valve', defaultPort: 27015 },
+];
 
-const SERVER_FIELDS = [
-  ['name', 'Server Name'], ['game', 'Game'],
+const COMMON_SERVER_FIELDS = [
+  ['name', 'Server Name'], ['game', 'Displayed Game Name'],
   ['tag', 'Category', 'select', ['SURVIVAL', 'ROLEPLAY', 'SANDBOX', 'HARDCORE', 'FPS', 'STRATEGY']],
   ['status', 'Fallback Status', 'select', ['offline', 'online', 'maintenance']],
   ['image', 'Image URL'], ['banner_position', 'Banner Position', 'select', ['top', 'upper', 'center', 'lower', 'bottom']],
-  ['description', 'Description', 'textarea'], ['ip', 'Connection Address'], ['join_link', 'Join Button URL'],
-  ['join_instructions', 'Joining Instructions', 'textarea'], ['query_type', 'Query Protocol / Game Type', 'select', QUERY_TYPES],
-  ['query_host', 'Query Host'], ['query_port', 'Query Port', 'number'], ['rcon_enabled', 'Use BattlEye RCon Players', 'boolean'],
-  ['rcon_host', 'BattlEye RCon Host'], ['rcon_port', 'BattlEye RCon Port', 'number'], ['rcon_password', 'BattlEye RCon Password', 'password'],
-  ['live_map_url', 'Live Map URL'], ['discord_channel_url', 'Discord Channel URL'], ['map', 'Fallback Map'], ['version', 'Fallback Version'],
-  ['players_max', 'Fallback Max Players', 'number'], ['mods', 'Mods / Plugins (comma separated)'], ['sort_order', 'Sort Order', 'number'], ['featured', 'Featured Server', 'boolean'],
+  ['description', 'Description', 'textarea'], ['ip', 'Public Connection Address'], ['join_link', 'Join Button URL'],
+  ['join_instructions', 'Joining Instructions', 'textarea'], ['live_map_url', 'Live Map URL'], ['discord_channel_url', 'Discord Channel URL'],
+  ['map', 'Fallback Map'], ['version', 'Fallback Version'], ['players_max', 'Fallback Max Players', 'number'],
+  ['mods', 'Mods / Plugins (comma separated)'], ['sort_order', 'Sort Order', 'number'], ['featured', 'Featured Server', 'boolean'],
+];
+
+const LEADERBOARD_FIELDS = [
   ['stat_show_zombie_kills', 'Leaderboard: Zombie Kills', 'boolean'], ['stat_show_pvp_kills', 'Leaderboard: PvP Kills', 'boolean'],
   ['stat_show_deaths', 'Leaderboard: Deaths', 'boolean'], ['stat_show_playtime', 'Leaderboard: 7DTD Playtime', 'boolean'],
   ['stat_show_score', 'Leaderboard: Score', 'boolean'], ['stat_show_level', 'Leaderboard: Level / Game Stage', 'boolean'],
@@ -24,7 +36,7 @@ const SERVER_FIELDS = [
 ];
 
 const SECTIONS = {
-  Server: { label: 'Servers', sort: '-sort_order', title: 'name', fields: SERVER_FIELDS },
+  Server: { label: 'Servers', sort: '-sort_order', title: 'name', customEditor: true },
   Project: { label: 'Projects', sort: 'sort_order', title: 'title', fields: [['title', 'Project Title'], ['status', 'Status', 'select', ['In Development', 'Live', 'Completed', 'On Hold']], ['game', 'Game'], ['thumbnail', 'Thumbnail URL'], ['screenshots', 'Screenshot URLs'], ['video_url', 'Video URL'], ['tags', 'Tags'], ['sort_order', 'Sort Order', 'number'], ['description', 'Description', 'textarea']] },
   Event: { label: 'Events', sort: 'date', title: 'title', fields: [['title', 'Event Title'], ['game', 'Game'], ['date', 'Date & Time', 'datetime-local'], ['server_id', 'Linked Server ID'], ['discord_link', 'Discord Event Link'], ['banner_image', 'Banner Image URL'], ['description', 'Description', 'textarea']] },
   StoreItem: { label: 'Store Items', sort: '-sort_order', title: 'name', fields: [['name', 'Item Name'], ['category', 'Category', 'select', ['Ranks', 'Cosmetics', 'Bundles', 'Merch', 'Other']], ['type', 'Type', 'select', ['digital', 'physical']], ['price_usd', 'Price (USD)', 'number'], ['token_price', 'Token Price', 'number'], ['badge', 'Badge'], ['image', 'Image URL'], ['available', 'Available', 'boolean'], ['sort_order', 'Sort Order', 'number'], ['description', 'Description', 'textarea']] },
@@ -40,165 +52,84 @@ function emptyFor(section) {
   return Object.fromEntries((section.fields || []).map(([key, , type, options]) => [key, type === 'number' ? 0 : type === 'boolean' ? true : type === 'select' ? options?.[0] || '' : '']));
 }
 function formForRow(section, row) { return { ...emptyFor(section), ...row }; }
-function formatDuration(seconds = 0) {
-  const total = Math.max(0, Number(seconds) || 0);
-  const hours = Math.floor(total / 3600);
-  const minutes = Math.floor((total % 3600) / 60);
-  return hours ? `${hours}h ${minutes}m` : `${minutes}m`;
-}
+function formatDuration(seconds = 0) { const total = Math.max(0, Number(seconds) || 0); const hours = Math.floor(total / 3600); const minutes = Math.floor((total % 3600) / 60); return hours ? `${hours}h ${minutes}m` : `${minutes}m`; }
 function serverText(server) { return [server?.query_type, server?.game, server?.name].filter(Boolean).join(' ').toLowerCase(); }
 function isDayZ(server) { return serverText(server).includes('dayz'); }
 function is7DTD(server) { const text = serverText(server); return text.includes('7dtd') || text.includes('7 days') || text.includes('seven days'); }
-
-function Toggle({ checked, onChange }) {
-  return <button type="button" role="switch" aria-checked={checked} onClick={() => onChange(!checked)} className={`relative h-7 w-12 rounded-full border transition ${checked ? 'border-emerald-300 bg-emerald-400/30' : 'border-white/15 bg-white/5'}`}>
-    <span className={`absolute top-1 h-5 w-5 rounded-full transition ${checked ? 'left-6 bg-emerald-300' : 'left-1 bg-gray-500'}`} />
-  </button>;
+function detectGameProfile(server = {}) {
+  const text = serverText(server);
+  if (server.query_type === 'palworld-rest' || text.includes('palworld')) return 'palworld';
+  if (server.query_type === 'dayz' || text.includes('dayz')) return 'dayz';
+  if (text.includes('7dtd') || text.includes('7 days') || text.includes('seven days')) return '7dtd';
+  if (server.query_type === 'minecraftbedrock') return 'minecraftbedrock';
+  if (server.query_type === 'minecraft') return 'minecraft';
+  if (server.query_type === 'rust') return 'rust';
+  if (server.query_type === 'valheim') return 'valheim';
+  if (server.query_type === 'arkse') return 'arkse';
+  return 'generic';
 }
 
+function Toggle({ checked, onChange }) {
+  return <button type="button" role="switch" aria-checked={checked} onClick={() => onChange(!checked)} className={`relative h-7 w-12 rounded-full border transition ${checked ? 'border-emerald-300 bg-emerald-400/30' : 'border-white/15 bg-white/5'}`}><span className={`absolute top-1 h-5 w-5 rounded-full transition ${checked ? 'left-6 bg-emerald-300' : 'left-1 bg-gray-500'}`} /></button>;
+}
 function Field({ spec, value, onChange }) {
   const [key, label, type = 'text', options = []] = spec;
   const common = 'w-full rounded-lg border border-emerald-400/20 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-emerald-400/60';
   if (type === 'boolean') return <label className="flex items-center justify-between gap-4 rounded-lg border border-white/5 bg-black/20 px-3 py-2"><span className="text-xs font-bold uppercase tracking-wider text-emerald-300">{label}</span><Toggle checked={value !== false} onChange={(next) => onChange(key, next)} /></label>;
-  return <label className={type === 'textarea' ? 'md:col-span-2' : ''}>
-    <span className="mb-1 block text-xs font-bold uppercase tracking-wider text-emerald-300">{label}</span>
-    {type === 'textarea' ? <textarea rows={5} className={common} value={value ?? ''} onChange={(event) => onChange(key, event.target.value)} />
-      : type === 'select' ? <select className={common} value={value ?? ''} onChange={(event) => onChange(key, event.target.value)}>{options.map((option) => <option key={option} value={option}>{option}</option>)}</select>
-        : <input className={common} type={type} autoComplete={type === 'password' ? 'new-password' : undefined} value={type === 'datetime-local' && value ? String(value).slice(0, 16) : value ?? ''} onChange={(event) => onChange(key, type === 'number' ? Number(event.target.value) : event.target.value)} />}
-  </label>;
+  return <label className={type === 'textarea' ? 'md:col-span-2' : ''}><span className="mb-1 block text-xs font-bold uppercase tracking-wider text-emerald-300">{label}</span>{type === 'textarea' ? <textarea rows={5} className={common} value={value ?? ''} onChange={(e) => onChange(key, e.target.value)} /> : type === 'select' ? <select className={common} value={value ?? ''} onChange={(e) => onChange(key, e.target.value)}>{options.map((option) => <option key={option} value={option}>{option}</option>)}</select> : <input className={common} type={type} autoComplete={type === 'password' ? 'new-password' : undefined} value={type === 'datetime-local' && value ? String(value).slice(0, 16) : value ?? ''} onChange={(e) => onChange(key, type === 'number' ? Number(e.target.value) : e.target.value)} />}</label>;
+}
+function HelpField({ label, help, children, wide = false }) { return <label className={wide ? 'md:col-span-2' : ''}><span className="mb-1 block text-xs font-bold uppercase tracking-wider text-emerald-300">{label}</span>{children}{help && <span className="mt-1 block text-xs text-gray-500">{help}</span>}</label>; }
+
+function ServerEditor({ form, setForm, loading, onSave, onCancel }) {
+  const [step, setStep] = useState(0);
+  const profile = form.game_profile || detectGameProfile(form);
+  const selected = GAME_PROFILES.find((item) => item.id === profile) || GAME_PROFILES[GAME_PROFILES.length - 1];
+  const common = 'w-full rounded-lg border border-emerald-400/20 bg-black/40 px-3 py-2.5 text-sm text-white outline-none focus:border-emerald-400/60';
+  const steps = ['Game', 'Connection', 'Appearance', 'Integrations'];
+  const updateProfile = (id) => {
+    const next = GAME_PROFILES.find((item) => item.id === id);
+    setForm((current) => ({
+      ...current,
+      game_profile: id,
+      game: id === '7dtd' ? '7 Days to Die' : next.label.replace('Other / Generic GameDig', current.game || 'Other'),
+      query_type: next.queryType,
+      query_host: current.query_host || '127.0.0.1',
+      query_port: next.defaultPort,
+      rcon_enabled: id === 'dayz' ? Boolean(current.rcon_enabled) : false,
+    }));
+  };
+  const field = (key, value) => setForm((current) => ({ ...current, [key]: value }));
+  const validateStep = () => {
+    if (step === 0 && !form.name?.trim()) return 'Enter a server name first.';
+    if (step === 1 && (!form.query_host?.trim() || !Number(form.query_port))) return 'Enter the query host and port.';
+    if (step === 1 && profile === 'palworld' && !(form.palworld_rest_password || form.rcon_password)) return 'Enter the Palworld admin password.';
+    return '';
+  };
+  const next = () => { const error = validateStep(); if (error) return window.alert(error); setStep((value) => Math.min(steps.length - 1, value + 1)); };
+  return <div className="mb-5 rounded-xl border border-emerald-400/20 bg-emerald-400/5 p-5">
+    <div className="mb-5 flex flex-wrap gap-2">{steps.map((label, index) => <button key={label} type="button" onClick={() => setStep(index)} className={`rounded-lg border px-3 py-2 text-xs font-bold ${step === index ? 'border-emerald-400/50 bg-emerald-400/15 text-emerald-300' : 'border-white/10 text-gray-500'}`}>{index + 1}. {label}</button>)}</div>
+    {step === 0 && <div className="space-y-5"><div><h3 className="text-lg font-black text-white">Choose the game</h3><p className="text-sm text-gray-500">ApexOrder will only show settings that apply to that game.</p></div><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{GAME_PROFILES.map((item) => <button key={item.id} type="button" onClick={() => updateProfile(item.id)} className={`rounded-xl border p-4 text-left transition ${profile === item.id ? 'border-emerald-400/60 bg-emerald-400/10' : 'border-white/10 bg-black/20 hover:border-white/20'}`}><span className="block font-bold text-white">{item.label}</span><span className="mt-1 block text-xs text-gray-500">{item.id === 'palworld' ? 'Uses the built-in REST API' : item.id === 'dayz' ? 'Game query with optional BattlEye players' : item.id === '7dtd' ? 'Steam query with ApexTelemetry support' : item.id === 'generic' ? 'Choose a supported query protocol manually' : 'Automatic game query'}</span></button>)}</div><div className="grid gap-4 md:grid-cols-2"><Field spec={['name', 'Server Name']} value={form.name} onChange={field} /><Field spec={['game', 'Displayed Game Name']} value={form.game} onChange={field} /></div></div>}
+    {step === 1 && <div className="space-y-5"><div><h3 className="text-lg font-black text-white">Connection settings</h3><p className="text-sm text-gray-500">These settings are used by ApexOrder to read live server status.</p></div><div className="grid gap-4 md:grid-cols-2">{profile === 'generic' && <HelpField label="Query protocol" help="Only use this for games without a dedicated preset."><select className={common} value={form.query_type || 'protocol-valve'} onChange={(e) => field('query_type', e.target.value)}>{QUERY_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}</select></HelpField>}<HelpField label={profile === 'palworld' ? 'REST API host' : 'Query host'} help="Use 127.0.0.1 when the game server runs on this machine."><input className={common} value={form.query_host || ''} onChange={(e) => field('query_host', e.target.value)} /></HelpField><HelpField label={profile === 'palworld' ? 'REST API port' : 'Query port'} help={profile === 'palworld' ? 'Palworld normally uses 8212.' : `Default for ${selected.label}: ${selected.defaultPort}.`}><input type="number" className={common} value={form.query_port || ''} onChange={(e) => field('query_port', Number(e.target.value))} /></HelpField>{profile === 'palworld' && <><HelpField label="Admin username" help="Palworld REST uses admin by default."><input className={common} value={form.palworld_rest_username || 'admin'} onChange={(e) => field('palworld_rest_username', e.target.value)} /></HelpField><HelpField label="Admin password" help="Stored server-side and never displayed publicly."><input type="password" autoComplete="new-password" className={common} value={form.palworld_rest_password || ''} onChange={(e) => field('palworld_rest_password', e.target.value)} /></HelpField></>}{profile === 'dayz' && <><div className="md:col-span-2 flex items-center justify-between rounded-lg border border-white/10 p-4"><div><span className="block text-xs font-bold uppercase tracking-wider text-emerald-300">Use BattlEye player list</span><span className="mt-1 block text-xs text-gray-500">Enables verified live player names through BERCon.</span></div><Toggle checked={form.rcon_enabled === true} onChange={(value) => field('rcon_enabled', value)} /></div>{form.rcon_enabled && <><Field spec={['rcon_host', 'BattlEye RCon Host']} value={form.rcon_host} onChange={field} /><Field spec={['rcon_port', 'BattlEye RCon Port', 'number']} value={form.rcon_port} onChange={field} /><Field spec={['rcon_password', 'BattlEye RCon Password', 'password']} value={form.rcon_password} onChange={field} /></>}</>}</div></div>}
+    {step === 2 && <div className="space-y-5"><div><h3 className="text-lg font-black text-white">Appearance and public details</h3><p className="text-sm text-gray-500">Control how this server appears to visitors.</p></div><div className="grid gap-4 md:grid-cols-2">{COMMON_SERVER_FIELDS.filter(([key]) => !['name', 'game'].includes(key)).map((spec) => <Field key={spec[0]} spec={spec} value={form[spec[0]]} onChange={field} />)}</div></div>}
+    {step === 3 && <div className="space-y-5"><div><h3 className="text-lg font-black text-white">Integrations and leaderboard display</h3><p className="text-sm text-gray-500">Only the relevant leaderboard controls are shown.</p></div><div className="grid gap-4 md:grid-cols-2">{profile === '7dtd' && LEADERBOARD_FIELDS.slice(0, 6).map((spec) => <Field key={spec[0]} spec={spec} value={form[spec[0]]} onChange={field} />)}{profile === 'dayz' && LEADERBOARD_FIELDS.slice(6).map((spec) => <Field key={spec[0]} spec={spec} value={form[spec[0]]} onChange={field} />)}{profile === 'palworld' && <div className="md:col-span-2 rounded-lg border border-emerald-400/20 bg-black/20 p-4 text-sm text-gray-300">Palworld automatically provides online players, maximum slots, server FPS, frametime, uptime, world day, base camps and world ID through its REST API.</div>}{!['7dtd', 'dayz', 'palworld'].includes(profile) && <div className="md:col-span-2 rounded-lg border border-white/10 bg-black/20 p-4 text-sm text-gray-400">No extra integration settings are required for this game.</div>}</div></div>}
+    <div className="mt-6 flex flex-wrap justify-between gap-3"><button type="button" onClick={onCancel} className="flex items-center gap-2 rounded-lg border border-white/10 px-4 py-2 text-xs font-bold text-gray-300"><X size={15} /> CANCEL</button><div className="flex gap-2">{step > 0 && <button type="button" onClick={() => setStep((value) => value - 1)} className="flex items-center gap-2 rounded-lg border border-white/10 px-4 py-2 text-xs font-bold text-gray-300"><ChevronLeft size={15} /> BACK</button>}{step < steps.length - 1 ? <button type="button" onClick={next} className="flex items-center gap-2 rounded-lg bg-emerald-400 px-4 py-2 text-xs font-black text-black">NEXT <ChevronRight size={15} /></button> : <button type="button" onClick={onSave} disabled={loading} className="flex items-center gap-2 rounded-lg bg-emerald-400 px-4 py-2 text-xs font-black text-black disabled:opacity-50"><Save size={15} /> SAVE SERVER</button>}</div></div>
+  </div>;
 }
 
-function liveFields(row) {
-  return row?.source === 'dayz'
-    ? [['player_name', 'Player Name'], ['totalPlaytimeSeconds', 'Total Playtime (seconds)', 'number'], ['weekPlaytimeSeconds', 'Weekly Playtime (seconds)', 'number'], ['monthPlaytimeSeconds', 'Monthly Playtime (seconds)', 'number'], ['sessionCount', 'Session Count', 'number'], ['longestSessionSeconds', 'Longest Session (seconds)', 'number']]
-    : [['player_name', 'Player Name'], ['zombieKills', 'Zombie Kills', 'number'], ['pvpKills', 'PvP Kills', 'number'], ['deaths', 'Deaths', 'number'], ['totalPlaytimeSeconds', 'Playtime (seconds)', 'number'], ['score', 'Score', 'number'], ['level', 'Level', 'number'], ['gameStage', 'Game Stage', 'number']];
-}
-
-function LiveStatRow({ row, onEdit, onDelete }) {
-  const source = row?.source === 'dayz' ? 'dayz' : '7dtd';
-  const details = source === 'dayz'
-    ? [`Total ${formatDuration(row.totalPlaytimeSeconds)}`, `Week ${formatDuration(row.weekPlaytimeSeconds)}`, `Month ${formatDuration(row.monthPlaytimeSeconds)}`, `${Number(row.sessionCount) || 0} sessions`, `Longest ${formatDuration(row.longestSessionSeconds)}`]
-    : [`${Number(row.zombieKills) || 0} zombies`, `${Number(row.pvpKills) || 0} PvP`, `${Number(row.deaths) || 0} deaths`, `${formatDuration(row.totalPlaytimeSeconds)} played`, `Score ${Number(row.score) || 0}`];
-  return <div className="rounded-lg border border-white/5 bg-black/25 p-3"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="font-bold text-white">{row.player_name || 'Unknown player'}</p><p className="text-xs text-gray-500">{row.server_name || 'Unknown server'} · {source.toUpperCase()}{row.online ? ' · ONLINE' : ''}</p></div><div className="flex flex-wrap items-center gap-2"><div className="flex flex-wrap gap-2">{details.map((detail) => <span key={detail} className="rounded border border-emerald-400/15 bg-emerald-400/5 px-2 py-1 text-[11px] font-mono text-gray-300">{detail}</span>)}</div><button onClick={() => onEdit(row)} className="rounded border border-emerald-400/20 px-3 py-1.5 text-xs font-bold text-emerald-300">EDIT</button><button onClick={() => onDelete(row)} className="rounded border border-red-400/20 p-2 text-red-300"><Trash2 size={14} /></button></div></div></div>;
-}
+function liveFields(row) { return row?.source === 'dayz' ? [['player_name', 'Player Name'], ['totalPlaytimeSeconds', 'Total Playtime (seconds)', 'number'], ['weekPlaytimeSeconds', 'Weekly Playtime (seconds)', 'number'], ['monthPlaytimeSeconds', 'Monthly Playtime (seconds)', 'number'], ['sessionCount', 'Session Count', 'number'], ['longestSessionSeconds', 'Longest Session (seconds)', 'number']] : [['player_name', 'Player Name'], ['zombieKills', 'Zombie Kills', 'number'], ['pvpKills', 'PvP Kills', 'number'], ['deaths', 'Deaths', 'number'], ['totalPlaytimeSeconds', 'Playtime (seconds)', 'number'], ['score', 'Score', 'number'], ['level', 'Level', 'number'], ['gameStage', 'Game Stage', 'number']]; }
+function LiveStatRow({ row, onEdit, onDelete }) { const source = row?.source === 'dayz' ? 'dayz' : '7dtd'; const details = source === 'dayz' ? [`Total ${formatDuration(row.totalPlaytimeSeconds)}`, `Week ${formatDuration(row.weekPlaytimeSeconds)}`, `Month ${formatDuration(row.monthPlaytimeSeconds)}`, `${Number(row.sessionCount) || 0} sessions`, `Longest ${formatDuration(row.longestSessionSeconds)}`] : [`${Number(row.zombieKills) || 0} zombies`, `${Number(row.pvpKills) || 0} PvP`, `${Number(row.deaths) || 0} deaths`, `${formatDuration(row.totalPlaytimeSeconds)} played`, `Score ${Number(row.score) || 0}`]; return <div className="rounded-lg border border-white/5 bg-black/25 p-3"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="font-bold text-white">{row.player_name || 'Unknown player'}</p><p className="text-xs text-gray-500">{row.server_name || 'Unknown server'} · {source.toUpperCase()}{row.online ? ' · ONLINE' : ''}</p></div><div className="flex flex-wrap items-center gap-2"><div className="flex flex-wrap gap-2">{details.map((detail) => <span key={detail} className="rounded border border-emerald-400/15 bg-emerald-400/5 px-2 py-1 text-[11px] font-mono text-gray-300">{detail}</span>)}</div><button onClick={() => onEdit(row)} className="rounded border border-emerald-400/20 px-3 py-1.5 text-xs font-bold text-emerald-300">EDIT</button><button onClick={() => onDelete(row)} className="rounded border border-red-400/20 p-2 text-red-300"><Trash2 size={14} /></button></div></div></div>; }
 
 export default function ContentManager() {
-  const sectionKeys = Object.keys(SECTIONS);
-  const [entity, setEntity] = useState(sectionKeys[0]);
-  const [rows, setRows] = useState([]);
-  const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState({});
-  const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState('');
-  const [gameFilter, setGameFilter] = useState('all');
-  const requestId = useRef(0);
-  const section = SECTIONS[entity];
-
-  const loadLiveStats = async () => {
-    const servers = await base44.entities.Server.list();
-    const [sevenResult, dayzResult] = await Promise.allSettled([
-      fetch('/api/leaderboards/7dtd?limit=100', { cache: 'no-store' }),
-      fetch('/api/leaderboards/dayz?limit=100', { cache: 'no-store' }),
-    ]);
-    const readRows = async (result, label) => {
-      if (result.status !== 'fulfilled') throw new Error(`${label} leaderboard could not be reached.`);
-      if (!result.value.ok) throw new Error(`${label} leaderboard returned ${result.value.status}.`);
-      const payload = await result.value.json();
-      return Array.isArray(payload) ? payload : [];
-    };
-    const errors = [];
-    let sevenRows = []; let dayzRows = [];
-    try { sevenRows = await readRows(sevenResult, '7DTD'); } catch (error) { errors.push(error.message); }
-    try { dayzRows = await readRows(dayzResult, 'DayZ'); } catch (error) { errors.push(error.message); }
-    if (errors.length === 2) throw new Error(errors.join(' '));
-    const sevenServer = servers.find(is7DTD);
-    const dayzServer = servers.find(isDayZ);
-    return {
-      warning: errors.join(' '),
-      rows: [
-        ...(sevenServer ? sevenRows.filter(Boolean).map((row) => ({ ...row, id: String(row.playerId || row.id || ''), player_name: row.name || row.aliases?.[0] || 'Unknown survivor', server_name: sevenServer.name, source: '7dtd' })).filter((row) => row.id) : []),
-        ...(dayzServer ? dayzRows.filter(Boolean).map((row) => ({ ...row, id: String(row.id || ''), player_name: row.displayName || 'Unknown survivor', server_name: dayzServer.name, source: 'dayz' })).filter((row) => row.id) : []),
-      ].sort((left, right) => String(left.server_name).localeCompare(String(right.server_name)) || String(left.player_name).localeCompare(String(right.player_name))),
-    };
-  };
-
-  const load = async () => {
-    const currentRequest = ++requestId.current;
-    setLoading(true); setMessage('');
-    try {
-      const result = section.liveStats ? await loadLiveStats() : { rows: await base44.entities[entity].list(section.sort), warning: '' };
-      if (currentRequest !== requestId.current) return;
-      setRows(Array.isArray(result.rows) ? result.rows : []);
-      setMessage(result.warning || '');
-    } catch (error) {
-      if (currentRequest !== requestId.current) return;
-      console.error('[ContentManager] load failed:', error);
-      setRows([]);
-      setMessage(error?.message || 'Unable to load this section.');
-    } finally {
-      if (currentRequest === requestId.current) setLoading(false);
-    }
-  };
-
+  const sectionKeys = Object.keys(SECTIONS); const [entity, setEntity] = useState(sectionKeys[0]); const [rows, setRows] = useState([]); const [editing, setEditing] = useState(null); const [form, setForm] = useState({}); const [loading, setLoading] = useState(false); const [message, setMessage] = useState(''); const [gameFilter, setGameFilter] = useState('all'); const requestId = useRef(0); const section = SECTIONS[entity];
+  const loadLiveStats = async () => { const servers = await base44.entities.Server.list(); const [sevenResult, dayzResult] = await Promise.allSettled([fetch('/api/leaderboards/7dtd?limit=100', { cache: 'no-store' }), fetch('/api/leaderboards/dayz?limit=100', { cache: 'no-store' })]); const readRows = async (result, label) => { if (result.status !== 'fulfilled') throw new Error(`${label} leaderboard could not be reached.`); if (!result.value.ok) throw new Error(`${label} leaderboard returned ${result.value.status}.`); const payload = await result.value.json(); return Array.isArray(payload) ? payload : []; }; const errors = []; let sevenRows = []; let dayzRows = []; try { sevenRows = await readRows(sevenResult, '7DTD'); } catch (error) { errors.push(error.message); } try { dayzRows = await readRows(dayzResult, 'DayZ'); } catch (error) { errors.push(error.message); } if (errors.length === 2) throw new Error(errors.join(' ')); const sevenServer = servers.find(is7DTD); const dayzServer = servers.find(isDayZ); return { warning: errors.join(' '), rows: [...(sevenServer ? sevenRows.filter(Boolean).map((row) => ({ ...row, id: String(row.playerId || row.id || ''), player_name: row.name || row.aliases?.[0] || 'Unknown survivor', server_name: sevenServer.name, source: '7dtd' })).filter((row) => row.id) : []), ...(dayzServer ? dayzRows.filter(Boolean).map((row) => ({ ...row, id: String(row.id || ''), player_name: row.displayName || 'Unknown survivor', server_name: dayzServer.name, source: 'dayz' })).filter((row) => row.id) : [])].sort((a, b) => String(a.server_name).localeCompare(String(b.server_name)) || String(a.player_name).localeCompare(String(b.player_name))) }; };
+  const load = async () => { const currentRequest = ++requestId.current; setLoading(true); setMessage(''); try { const result = section.liveStats ? await loadLiveStats() : { rows: await base44.entities[entity].list(section.sort), warning: '' }; if (currentRequest !== requestId.current) return; setRows(Array.isArray(result.rows) ? result.rows : []); setMessage(result.warning || ''); } catch (error) { if (currentRequest !== requestId.current) return; setRows([]); setMessage(error?.message || 'Unable to load this section.'); } finally { if (currentRequest === requestId.current) setLoading(false); } };
   useEffect(() => { setEditing(null); setGameFilter('all'); load(); }, [entity]);
-
-  const startNew = () => {
-    setEditing('new');
-    const next = emptyFor(section);
-    if (entity === 'Server') Object.assign(next, { query_type: 'protocol-valve', query_host: '127.0.0.1', query_port: 26903, rcon_enabled: false, rcon_port: 2306, banner_position: 'center' });
-    setForm(next);
-  };
-  const startEdit = (row) => { setEditing(`${row.source || entity}-${row.id}`); setForm(section.liveStats ? { ...row } : formForRow(section, row)); };
+  const startNew = () => { setEditing('new'); if (entity === 'Server') setForm({ name: '', game: '7 Days to Die', game_profile: '7dtd', query_type: 'protocol-valve', query_host: '127.0.0.1', query_port: 26903, rcon_enabled: false, rcon_port: 2306, banner_position: 'center', status: 'offline', tag: 'SURVIVAL', sort_order: 0, featured: false }); else setForm(emptyFor(section)); };
+  const startEdit = (row) => { setEditing(`${row.source || entity}-${row.id}`); setForm(section.liveStats ? { ...row } : entity === 'Server' ? { ...row, game_profile: detectGameProfile(row), palworld_rest_password: row.palworld_rest_password || '' } : formForRow(section, row)); };
   const cancel = () => { setEditing(null); setForm({}); };
-
-  const save = async () => {
-    setLoading(true); setMessage('');
-    try {
-      if (section.liveStats) {
-        const response = await fetch(`/api/admin/player-stats/${form.source}/${encodeURIComponent(form.id)}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) });
-        const result = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(result.error || `Update failed (${response.status})`);
-      } else {
-        const payload = formForRow(section, form);
-        if (payload.date && !String(payload.date).endsWith('Z')) payload.date = new Date(payload.date).toISOString();
-        if (editing === 'new') await base44.entities[entity].create(payload); else await base44.entities[entity].update(form.id || editing, payload);
-      }
-      setMessage(editing === 'new' ? 'Created successfully.' : 'Updated successfully.');
-      cancel(); await load();
-    } catch (error) { setMessage(error?.message || 'Save failed.'); } finally { setLoading(false); }
-  };
-
-  const remove = async (rowOrId) => {
-    const row = typeof rowOrId === 'object' ? rowOrId : null;
-    const warning = row ? `Delete ${row.player_name} and all captured ${String(row.source).toUpperCase()} stats? The record may be recreated when the player next joins.` : 'Delete this item permanently?';
-    if (!window.confirm(warning)) return;
-    setLoading(true); setMessage('');
-    try {
-      if (section.liveStats && row) {
-        const response = await fetch(`/api/admin/player-stats/${row.source}/${encodeURIComponent(row.id)}`, { method: 'DELETE' });
-        const result = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(result.error || `Delete failed (${response.status})`);
-      } else await base44.entities[entity].delete(rowOrId);
-      setMessage('Deleted successfully.'); await load();
-    } catch (error) { setMessage(error?.message || 'Delete failed.'); } finally { setLoading(false); }
-  };
-
+  const save = async () => { setLoading(true); setMessage(''); try { if (section.liveStats) { const response = await fetch(`/api/admin/player-stats/${form.source}/${encodeURIComponent(form.id)}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) }); const result = await response.json().catch(() => ({})); if (!response.ok) throw new Error(result.error || `Update failed (${response.status})`); } else { const payload = entity === 'Server' ? { ...form } : formForRow(section, form); delete payload.game_profile; if (entity === 'Server') { const profile = GAME_PROFILES.find((item) => item.id === (form.game_profile || detectGameProfile(form))); if (profile && profile.id !== 'generic') payload.query_type = profile.queryType; if (profile?.id === 'palworld') { payload.query_port = Number(payload.query_port || 8212); payload.rcon_enabled = false; } } if (payload.date && !String(payload.date).endsWith('Z')) payload.date = new Date(payload.date).toISOString(); if (editing === 'new') await base44.entities[entity].create(payload); else await base44.entities[entity].update(form.id || editing, payload); } setMessage(editing === 'new' ? 'Created successfully.' : 'Updated successfully.'); cancel(); await load(); } catch (error) { setMessage(error?.message || 'Save failed.'); } finally { setLoading(false); } };
+  const remove = async (rowOrId) => { const row = typeof rowOrId === 'object' ? rowOrId : null; const warning = row ? `Delete ${row.player_name} and all captured ${String(row.source).toUpperCase()} stats? The record may be recreated when the player next joins.` : 'Delete this item permanently?'; if (!window.confirm(warning)) return; setLoading(true); setMessage(''); try { if (section.liveStats && row) { const response = await fetch(`/api/admin/player-stats/${row.source}/${encodeURIComponent(row.id)}`, { method: 'DELETE' }); const result = await response.json().catch(() => ({})); if (!response.ok) throw new Error(result.error || `Delete failed (${response.status})`); } else await base44.entities[entity].delete(rowOrId); setMessage('Deleted successfully.'); await load(); } catch (error) { setMessage(error?.message || 'Delete failed.'); } finally { setLoading(false); } };
   const updateStatus = async (row, status) => { setLoading(true); try { await base44.entities[entity].update(row.id, { status }); await load(); } catch (error) { setMessage(error.message); } finally { setLoading(false); } };
-  const filteredRows = useMemo(() => section.liveStats && gameFilter !== 'all' ? rows.filter((row) => row.source === gameFilter) : rows, [rows, section.liveStats, gameFilter]);
-  const summary = `${filteredRows.length}${section.liveStats && gameFilter !== 'all' ? ` of ${rows.length}` : ''} ${section.label.toLowerCase()}`;
-  const editFields = section.liveStats ? liveFields(form) : section.fields || [];
-
-  return <div className="space-y-5">
-    <div className="flex flex-wrap gap-2">{sectionKeys.map((key) => <button key={key} onClick={() => setEntity(key)} className={`rounded-lg border px-3 py-2 text-xs font-bold ${entity === key ? 'border-emerald-400/50 bg-emerald-400/10 text-emerald-300' : 'border-white/10 text-gray-400'}`}>{SECTIONS[key].label}</button>)}</div>
-    <div className="rounded-xl border border-emerald-400/15 bg-black/30 p-5">
-      <div className="mb-5 flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-lg font-black text-white">{section.label}</h2><p className="text-xs text-gray-500">{summary}{section.liveStats ? ' · automatically populated from live game data' : ''}</p></div><div className="flex gap-2"><button onClick={load} disabled={loading} className="rounded-lg border border-white/10 p-2 text-gray-400 hover:text-white disabled:opacity-40"><RefreshCw size={16} className={loading ? 'animate-spin' : ''} /></button>{!section.readOnly && !section.statusOnly && !section.liveStats && <button onClick={startNew} className="flex items-center gap-2 rounded-lg border border-emerald-400/40 bg-emerald-400/10 px-3 py-2 text-xs font-bold text-emerald-300"><Plus size={15} /> NEW</button>}</div></div>
-      {section.liveStats && <div className="mb-5 flex flex-wrap items-center gap-2"><span className="mr-1 text-xs font-bold uppercase tracking-wider text-gray-500">Filter by game</span>{[['all', 'All Games'], ['7dtd', '7 Days to Die'], ['dayz', 'DayZ']].map(([value, label]) => <button key={value} onClick={() => setGameFilter(value)} className={`rounded-lg border px-3 py-2 text-xs font-bold ${gameFilter === value ? 'border-emerald-400/50 bg-emerald-400/10 text-emerald-300' : 'border-white/10 text-gray-400'}`}>{label}</button>)}</div>}
-      {message && <div className="mb-4 rounded-lg border border-amber-400/20 bg-amber-400/5 p-3 text-sm text-amber-200">{message}</div>}
-      {editing && <div className="mb-5 rounded-xl border border-emerald-400/20 bg-emerald-400/5 p-4"><div className="mb-3 text-xs font-bold uppercase tracking-widest text-gold">{section.liveStats ? `Editing ${String(form.source || '').toUpperCase()} live stats` : editing === 'new' ? 'New record' : 'Edit record'}</div><div className="grid gap-4 md:grid-cols-2">{editFields.map((spec) => <Field key={spec[0]} spec={spec} value={form[spec[0]]} onChange={(key, value) => setForm((current) => ({ ...current, [key]: value }))} />)}</div><div className="mt-4 flex gap-2"><button onClick={save} disabled={loading} className="flex items-center gap-2 rounded-lg bg-emerald-400 px-4 py-2 text-xs font-black text-black disabled:opacity-50"><Save size={15} /> SAVE</button><button onClick={cancel} className="flex items-center gap-2 rounded-lg border border-white/10 px-4 py-2 text-xs font-bold text-gray-300"><X size={15} /> CANCEL</button></div></div>}
-      {loading && !editing ? <div className="flex min-h-32 items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-2 border-emerald-400/20 border-t-emerald-400" /></div> : <div className="space-y-2">
-        {section.liveStats ? filteredRows.map((row) => <LiveStatRow key={`${row.source}-${row.id}`} row={row} onEdit={startEdit} onDelete={remove} />) : filteredRows.map((row) => <div key={row.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-white/5 bg-black/25 p-3"><div><p className="font-bold text-white">{row[section.title] || row.id}</p><p className="text-xs text-gray-500">{row.status || row.category || row.game || row.id}</p></div><div className="flex items-center gap-2">{section.statusOnly ? <select value={row.status || 'pending'} onChange={(event) => updateStatus(row, event.target.value)} className="rounded border border-white/10 bg-black px-2 py-1 text-xs text-white"><option value="pending">pending</option><option value="reviewing">reviewing</option><option value="approved">approved</option><option value="rejected">rejected</option></select> : !section.readOnly && <button onClick={() => startEdit(row)} className="rounded border border-emerald-400/20 px-3 py-1.5 text-xs font-bold text-emerald-300">EDIT</button>}{!section.readOnly && <button onClick={() => remove(row.id)} className="rounded border border-red-400/20 p-2 text-red-300"><Trash2 size={14} /></button>}</div></div>)}
-        {filteredRows.length === 0 && <p className="py-8 text-center text-sm text-gray-500">{section.liveStats && gameFilter !== 'all' ? `No ${gameFilter === 'dayz' ? 'DayZ' : '7 Days to Die'} player records found.` : 'No records yet.'}</p>}
-      </div>}
-    </div>
-  </div>;
+  const filteredRows = useMemo(() => section.liveStats && gameFilter !== 'all' ? rows.filter((row) => row.source === gameFilter) : rows, [rows, section.liveStats, gameFilter]); const summary = `${filteredRows.length}${section.liveStats && gameFilter !== 'all' ? ` of ${rows.length}` : ''} ${section.label.toLowerCase()}`; const editFields = section.liveStats ? liveFields(form) : section.fields || [];
+  return <div className="space-y-5"><div className="flex flex-wrap gap-2">{sectionKeys.map((key) => <button key={key} onClick={() => setEntity(key)} className={`rounded-lg border px-3 py-2 text-xs font-bold ${entity === key ? 'border-emerald-400/50 bg-emerald-400/10 text-emerald-300' : 'border-white/10 text-gray-400'}`}>{SECTIONS[key].label}</button>)}</div><div className="rounded-xl border border-emerald-400/15 bg-black/30 p-5"><div className="mb-5 flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-lg font-black text-white">{section.label}</h2><p className="text-xs text-gray-500">{summary}{section.liveStats ? ' · automatically populated from live game data' : ''}</p></div><div className="flex gap-2"><button onClick={load} disabled={loading} className="rounded-lg border border-white/10 p-2 text-gray-400 hover:text-white disabled:opacity-40"><RefreshCw size={16} className={loading ? 'animate-spin' : ''} /></button>{!section.readOnly && !section.statusOnly && !section.liveStats && <button onClick={startNew} className="flex items-center gap-2 rounded-lg border border-emerald-400/40 bg-emerald-400/10 px-3 py-2 text-xs font-bold text-emerald-300"><Plus size={15} /> NEW</button>}</div></div>{section.liveStats && <div className="mb-5 flex flex-wrap items-center gap-2"><span className="mr-1 text-xs font-bold uppercase tracking-wider text-gray-500">Filter by game</span>{[['all', 'All Games'], ['7dtd', '7 Days to Die'], ['dayz', 'DayZ']].map(([value, label]) => <button key={value} onClick={() => setGameFilter(value)} className={`rounded-lg border px-3 py-2 text-xs font-bold ${gameFilter === value ? 'border-emerald-400/50 bg-emerald-400/10 text-emerald-300' : 'border-white/10 text-gray-400'}`}>{label}</button>)}</div>}{message && <div className="mb-4 rounded-lg border border-amber-400/20 bg-amber-400/5 p-3 text-sm text-amber-200">{message}</div>}{editing && entity === 'Server' ? <ServerEditor form={form} setForm={setForm} loading={loading} onSave={save} onCancel={cancel} /> : editing && <div className="mb-5 rounded-xl border border-emerald-400/20 bg-emerald-400/5 p-4"><div className="mb-3 text-xs font-bold uppercase tracking-widest text-gold">{section.liveStats ? `Editing ${String(form.source || '').toUpperCase()} live stats` : editing === 'new' ? 'New record' : 'Edit record'}</div><div className="grid gap-4 md:grid-cols-2">{editFields.map((spec) => <Field key={spec[0]} spec={spec} value={form[spec[0]]} onChange={(key, value) => setForm((current) => ({ ...current, [key]: value }))} />)}</div><div className="mt-4 flex gap-2"><button onClick={save} disabled={loading} className="flex items-center gap-2 rounded-lg bg-emerald-400 px-4 py-2 text-xs font-black text-black disabled:opacity-50"><Save size={15} /> SAVE</button><button onClick={cancel} className="flex items-center gap-2 rounded-lg border border-white/10 px-4 py-2 text-xs font-bold text-gray-300"><X size={15} /> CANCEL</button></div></div>}{loading && !editing ? <div className="flex min-h-32 items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-2 border-emerald-400/20 border-t-emerald-400" /></div> : <div className="space-y-2">{section.liveStats ? filteredRows.map((row) => <LiveStatRow key={`${row.source}-${row.id}`} row={row} onEdit={startEdit} onDelete={remove} />) : filteredRows.map((row) => <div key={row.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-white/5 bg-black/25 p-3"><div><p className="font-bold text-white">{row[section.title] || row.id}</p><p className="text-xs text-gray-500">{row.status || row.category || row.game || row.id}</p></div><div className="flex items-center gap-2">{section.statusOnly ? <select value={row.status || 'pending'} onChange={(e) => updateStatus(row, e.target.value)} className="rounded border border-white/10 bg-black px-2 py-1 text-xs text-white"><option value="pending">pending</option><option value="reviewing">reviewing</option><option value="approved">approved</option><option value="rejected">rejected</option></select> : !section.readOnly && <button onClick={() => startEdit(row)} className="rounded border border-emerald-400/20 px-3 py-1.5 text-xs font-bold text-emerald-300">EDIT</button>}{!section.readOnly && <button onClick={() => remove(row.id)} className="rounded border border-red-400/20 p-2 text-red-300"><Trash2 size={14} /></button>}</div></div>)}{filteredRows.length === 0 && <p className="py-8 text-center text-sm text-gray-500">{section.liveStats && gameFilter !== 'all' ? `No ${gameFilter === 'dayz' ? 'DayZ' : '7 Days to Die'} player records found.` : 'No records yet.'}</p>}</div>}</div></div>;
 }
