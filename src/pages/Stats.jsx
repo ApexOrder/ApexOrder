@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Clock, History, Home, Radio, RefreshCw, Skull, Star, Timer, UserRound } from 'lucide-react';
+import { Clock, History, Radio, RefreshCw, Skull, Star, Timer } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import SectionHeading from '@/components/ui/SectionHeading';
@@ -83,7 +83,6 @@ function mapPalworld(item, serverId) {
     server_id: serverId,
     player_name: item.name || item.accountName || 'Unknown survivor',
     level: item.level ?? null,
-    buildings: item.buildingCount ?? item.buildings ?? null,
     ping: item.ping ?? null,
     source: 'palworld',
   };
@@ -162,7 +161,6 @@ function PalworldRow({ stat, rank, sortKey }) {
       </div>
       <div className="flex gap-5 text-center font-mono text-xs">
         <div><div className="text-gray-600">LEVEL</div><div className={sortKey === 'level' ? 'font-bold text-emerald-glow' : 'text-gray-300'}>{stat.level ?? '—'}</div></div>
-        <div className="hidden sm:block"><div className="text-gray-600">BUILDINGS</div><div className={sortKey === 'buildings' ? 'font-bold text-emerald-glow' : 'text-gray-300'}>{stat.buildings ?? '—'}</div></div>
         {stat.ping != null && <div className="hidden md:block"><div className="text-gray-600">PING</div><div className="text-gray-300">{Math.round(stat.ping)} ms</div></div>}
       </div>
     </motion.div>
@@ -259,7 +257,6 @@ export default function Stats() {
     shown(activeServer, 'stat_show_score') && { key: 'score', label: 'Score', icon: Star },
   ].filter(Boolean) : activeIsPalworld ? [
     { key: 'level', label: 'Level', icon: Star },
-    { key: 'buildings', label: 'Buildings', icon: Home },
   ] : [
     { key: 'score', label: 'Score', icon: Star },
     { key: 'kills', label: 'Kills', icon: Skull },
