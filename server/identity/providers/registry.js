@@ -1,10 +1,12 @@
 import { DayZPlayerProvider } from './dayzProvider.js';
+import { PalworldPlayerProvider } from './palworldProvider.js';
 import { SevenDaysToDiePlayerProvider } from './sevenDaysToDieProvider.js';
 
 export function createPlayerProviderRegistry() {
   const providers = [
     new DayZPlayerProvider(),
     new SevenDaysToDiePlayerProvider(),
+    new PalworldPlayerProvider(),
   ];
 
   return {
