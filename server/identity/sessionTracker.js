@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { canonicalisePlayerIdentity } from './canonicalIdentity.js';
 
 export function createSessionTracker(db, identityService) {
   const getOpenSessions = db.prepare(`
@@ -24,7 +25,11 @@ export function createSessionTracker(db, identityService) {
     const onlinePlayerIds = new Set();
 
     for (const observedPlayer of observedPlayers) {
-      const player = identityService.upsertPlayer({ ...observedPlayer, seenAt: observedAt });
+      // Identity matching belongs here, above every game/provider adapter. Any
+      // provider that exposes a known account UID therefore resolves to the same
+      // player record instead of creating one profile per game.
+      const canonicalPlayer = canonicalisePlayerIdentity(observedPlayer);
+      const player = identityService.upsertPlayer({ ...canonicalPlayer, seenAt: observedAt });
       onlinePlayerIds.add(player.id);
     }
 
